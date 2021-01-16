@@ -739,7 +739,7 @@ module Engine
             "E13",
             "H4"
          ],
-         "town=revenue:20;city=revenue:20":[
+         "town=revenue:20,loc:1;city=revenue:20,loc:center;path=a:_1,b:_0":[
             "M7"
          ],
          "town=revenue:10;path=a:1,b:_0":[
