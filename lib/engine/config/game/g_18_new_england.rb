@@ -298,7 +298,7 @@ module Engine
          "tokens":[
             0
          ],
-         "coordinates":"H10",
+         "coordinates":"M5",
          "type":"minor",
          "color":"#b43e95"
       },
@@ -742,7 +742,7 @@ module Engine
          "town=revenue:20;city=revenue:20":[
             "M7"
          ],
-         "town=revenue:0;upgrade=cost:20,terrain:water":[
+         "town=revenue:10;path=a:1,b:_0":[
             "N4"
          ]
       },
@@ -803,7 +803,7 @@ module Engine
          "city=revenue:20;path=a:_0,b:0;path=a:_0,b:1;upgrade=cost:20,terrain:water":[
             "K3"
          ],
-         "city=revenue:20;town=revenue=10;path=a:_1,b:5;path=a:_0,b:_1":[
+         "city=revenue:20;town=revenue=10;path=a:_1,b:5;path=a:_0,b:_1;upgrade=cost:20,terrain:water":[
             "L4"
          ],
          "city=revenue:30;city=revenue:30;path=a:2,b:_0;path=a:4,b:_1;label=B":[
