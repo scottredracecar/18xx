@@ -7,7 +7,7 @@ module Engine
   module Game
     class G18NewEngland < Base
 
-      DEV_STAGE = :production
+      DEV_STAGE = :prealpha
 
       load_from_json(Config::Game::G18NewEngland::JSON)
 
