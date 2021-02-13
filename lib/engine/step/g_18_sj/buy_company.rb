@@ -1,6 +1,7 @@
 # frozen_string_literal: true
 
 require_relative '../buy_company'
+require_relative '../../game_error'
 
 module Engine
   module Step
@@ -13,8 +14,8 @@ module Engine
           buyer = action.entity
           train_count = minor.trains.size + buyer.trains.size
 
-          if train_count > @game.phase.train_limit(buyer)
-            @game.game_error("Cannot merge minor #{minor.name} as it exceeds train limit")
+          if train_count > @game.train_limit(buyer)
+            raise GameError, "Cannot merge minor #{minor.name} as it exceeds train limit"
           end
 
           super

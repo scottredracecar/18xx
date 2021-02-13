@@ -10,7 +10,6 @@ module Engine
         include ShareBuying
 
         def actions(entity)
-          # @todo: this needs to catch the failed merge case
           return [] if !entity.player? || !@round.converted
 
           actions = []
@@ -46,7 +45,7 @@ module Engine
         end
 
         def check_merge
-          return unless active_entities.none?
+          return unless eligible_players.empty?
 
           if corporation.shares.first&.president
             @broken_merge = true
@@ -65,6 +64,8 @@ module Engine
           log_pass(action.entity)
           action.entity.pass!
           check_merge
+          # Don't make the current player pass again
+          @round.share_dealing_players.delete(action.entity) if active_entities&.first == action.entity
         end
 
         def can_buy_any?(entity)
@@ -100,12 +101,21 @@ module Engine
           corporation
         end
 
+        def eligible_players
+          @round.share_dealing_players
+          .select { |p| p.active? && can_buy_any?(p) }
+        end
+
         def active_entities
           return [] unless corporation
           return @game.players if @broken_merge
 
-          [@round.share_dealing_players
-          .select { |p| p.active? && can_buy_any?(p) }.first].compact
+          players = eligible_players
+          if players.empty?
+            check_merge
+            players = eligible_players
+          end
+          [players.first].compact
         end
       end
     end

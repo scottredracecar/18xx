@@ -42,6 +42,7 @@ module View
               *render_minors,
               *render_corporations,
               render_players,
+              render_map,
             ].compact)
           end
         end
@@ -102,6 +103,17 @@ module View
 
           @selected_company = @step.auctioning if @step.auctioning
 
+          companies = @step.available.select(&:company?)
+          if @step.respond_to?(:tiered_auction?) && @step.tiered_auction?
+            companies.group_by(&:value).values.map do |tier|
+              h(:div, { style: { display: 'table' } }, tier.map { |company| render_company(company) })
+            end
+          else
+            companies.map { |company| render_company(company) }
+          end
+        end
+
+        def render_company(company)
           props = {
             style: {
               display: 'inline-block',
@@ -109,11 +121,9 @@ module View
             },
           }
 
-          @step.available.select(&:company?).map do |company|
-            children = [h(Company, company: company, bids: @step.bids[company])]
-            children << render_input(company) if @selected_company == company
-            h(:div, props, children)
-          end
+          children = [h(Company, company: company, bids: @step.bids[company])]
+          children << render_input(company) if @selected_company == company
+          h(:div, props, children)
         end
 
         def render_input(company)
@@ -132,19 +142,23 @@ module View
           return [h(:button, { on: { click: -> { choose } } }, 'Choose')] if @step.may_choose?(company)
 
           input = h(:input, style: { marginRight: '1rem' }, props: {
-            value: @step.min_bid(company),
-            step: @step.min_increment,
-            min: @step.min_bid(company),
-            max: @step.max_bid(@current_entity, company),
-            type: 'number',
-            size: @current_entity.cash.to_s.size,
-          })
+                      value: @step.min_bid(company),
+                      step: @step.min_increment,
+                      min: @step.min_bid(company),
+                      max: @step.max_bid(@current_entity, company),
+                      type: 'number',
+                      size: @current_entity.cash.to_s.size,
+                    })
 
-          [
-            input,
-            h(:button, { on: { click: -> { create_bid(company, input) } } }, 'Place Bid'),
-            *render_move_bid_buttons(company, input),
-          ].compact
+          buttons = []
+          if @step.min_bid(company) <= @step.max_place_bid(@current_entity, company)
+            buttons << h(:button, { on: { click: -> { create_bid(company, input) } } }, 'Place Bid')
+          end
+          buttons.concat(render_move_bid_buttons(company, input))
+
+          return [] if buttons.empty?
+
+          [input, *buttons]
         end
 
         def render_move_bid_buttons(company, input)
@@ -155,23 +169,27 @@ module View
 
           moveable_bids.flat_map do |from_company, from_bids|
             from_bids.map do |from_bid|
+              bid_max = @step.max_move_bid(@current_entity, company, from_bid.price)
+              bid_min = @step.min_move_bid(company, from_bid.price)
+              next if bid_max < bid_min
+
               h(:button, { on: { click: -> { move_bid(company, input, from_company, from_bid.price) } } },
                 "Move #{from_company.sym} #{@game.format_currency(from_bid.price)} Bid")
             end
-          end
+          end.compact
         end
 
         def render_turn_bid
           return if !@current_actions.include?('bid') || @step.auctioning != :turn
 
           input = h(:input, style: { margin: '1rem 0px', marginRight: '1rem' }, props: {
-            value: @step.min_player_bid,
-            step: @step.min_increment,
-            min: @step.min_player_bid,
-            max: @step.max_player_bid(@current_entity),
-            type: 'number',
-            size: @current_entity.cash.to_s.size,
-          })
+                      value: @step.min_player_bid,
+                      step: @step.min_increment,
+                      min: @step.min_player_bid,
+                      max: @step.max_player_bid(@current_entity),
+                      type: 'number',
+                      size: @current_entity.cash.to_s.size,
+                    })
 
           h(:div,
             [
@@ -313,6 +331,13 @@ module View
             from_price: from_price,
           ))
           store(:selected_company, nil, skip: true)
+        end
+
+        # show the map if there are minors to pick from
+        def render_map
+          return nil unless @step.available.any?(&:minor?)
+
+          h(Game::Map, game: @game)
         end
       end
     end

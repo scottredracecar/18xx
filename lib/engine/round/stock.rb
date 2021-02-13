@@ -56,7 +56,11 @@ module Engine
         @game.finished || @entities.all?(&:passed?)
       end
 
-      private
+      def stock?
+        true
+      end
+
+      protected
 
       def finish_round
         @game.corporations.select(&:floated?).sort.each do |corp|
@@ -77,6 +81,8 @@ module Engine
           @game.log_share_price(corp, prev)
         end
       end
+
+      private
 
       def sold_out_stock_movement(corp)
         @game.stock_market.move_up(corp)

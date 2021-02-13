@@ -6,8 +6,6 @@ require_relative 'base'
 module Engine
   module Game
     class G18SJ < Base
-      attr_accessor :priority_deal_chooser
-
       register_colors(
         black: '#0a0a0a', # STJ
         brightGreen: '#7bb137', # UGJ
@@ -64,41 +62,45 @@ module Engine
       OPTIONAL_PRIVATE_D = %w[GKB SB].freeze
       OPTIONAL_PUBLIC = %w[STJ TGOJ ÖSJ MYJ].freeze
 
-      MAIN_LINE_INFO = {
+      MAIN_LINE_ORIENTATION = {
         # Stockholm-Malmo main line
-        'F9' => { orientation: [2, 5], main_line: 'M-S' },
-        'E8' => { orientation: [2, 5], main_line: 'M-S' },
-        'D7' => { orientation: [2, 5], main_line: 'M-S' },
-        'C6' => { orientation: [2, 5], main_line: 'M-S' },
-        'B5' => { orientation: [2, 5], main_line: 'M-S' },
-        'A4' => { orientation: [1, 5], main_line: 'M-S' },
+        'F9' => [2, 5],
+        'E8' => [2, 5],
+        'D7' => [2, 5],
+        'C6' => [2, 5],
+        'B5' => [2, 5],
+        'A4' => [1, 5],
         # Stockholm-Goteborg main line
-        'F11' => { orientation: [0, 3], main_line: 'G-S' },
-        'E12' => { orientation: [0, 3], main_line: 'G-S' },
-        'D13' => { orientation: [0, 2], main_line: 'G-S' },
-        'C12' => { orientation: [2, 5], main_line: 'G-S' },
-        'B11' => { orientation: [2, 5], main_line: 'G-S' },
+        'F11' => [0, 3],
+        'E12' => [0, 3],
+        'D13' => [0, 2],
+        'C12' => [2, 5],
+        'B11' => [2, 5],
         # Stockholm-Lulea main line
-        'G12' => { orientation: [1, 3], main_line: 'L-S' },
-        'F13' => { orientation: [0, 3], main_line: 'L-S' },
-        'E14' => { orientation: [0, 4], main_line: 'L-S' },
-        'E16' => { orientation: [1, 4], main_line: 'L-S' },
-        'E18' => { orientation: [1, 4], main_line: 'L-S' },
-        'E20' => { orientation: [1, 4], main_line: 'L-S' },
-        'E22' => { orientation: [1, 4], main_line: 'L-S' },
-        'E24' => { orientation: [1, 5], main_line: 'L-S' },
-        'F25' => { orientation: [2, 5], main_line: 'L-S' },
+        'G12' => [1, 3],
+        'F13' => [0, 3],
+        'E14' => [0, 4],
+        'E16' => [1, 4],
+        'E18' => [1, 4],
+        'E20' => [1, 4],
+        'E22' => [1, 4],
+        'E24' => [1, 5],
+        'F25' => [2, 5],
       }.freeze
+
       MAIN_LINE_COUNT = {
         'M-S' => 6,
         'G-S' => 5,
         'L-S' => 9,
       }.freeze
+
       MAIN_LINE_DESCRIPTION = {
         'M-S' => 'Stockholm-Malmö',
         'G-S' => 'Stockholm-Göteborg',
         'L-S' => 'Stochholm-Luleå',
       }.freeze
+
+      MAIN_LINE_ICONS = %w[M-S G-S L-S].freeze
 
       BONUS_ICONS = %w[N S O V M m_lower_case B b_lower_case].freeze
 
@@ -107,7 +109,6 @@ module Engine
       }.freeze
 
       GKB_HEXES = %w[C8 C16 E8].freeze
-      GKB_BONUSES = [0, 20, 30, 50].freeze
 
       def init_corporations(stock_market)
         corporations = super
@@ -128,6 +129,18 @@ module Engine
           @removed_companies << to_remove
         end
         @log << "Removed companies: #{@removed_companies.map(&:name).join(', ')}"
+
+        # Handle Priority Deal Chooser private (NEFT)
+        # It is removed if Nils Ericsson is removed (as it does not appear among the buyable ones).
+        # If Nils Ericsson remains, put NEFT last and let bank be owner, so it wont disturb auction,
+        # and it will be assigned to NE owner in the auction.
+        pdc = companies.find { |c| c.sym == 'NEFT' }
+        if @removed_companies.find { |c| c.sym == 'NE' }
+          @removed_companies << pdc
+        else
+          pdc.owner = @bank
+        end
+
         companies - @removed_companies
       end
 
@@ -152,6 +165,10 @@ module Engine
 
       def nils_ericsson
         @nils_ericsson ||= company_by_id('NE')
+      end
+
+      def priority_deal_chooser
+        @priority_deal_chooser ||= company_by_id('NEFT')
       end
 
       def sveabolaget
@@ -188,19 +205,16 @@ module Engine
 
         nils_ericsson.add_ability(Ability::Close.new(
           type: :close,
-          when: :train,
+          when: 'bought_train',
           corporation: abilities(nils_ericsson, :shares).shares.first.corporation.name,
         )) if nils_ericsson && !nils_ericsson.closed?
 
-        @main_line_hexes = @hexes.select { |h| main_line_hex?(h) }
-
-        @tile_lays = []
         @special_tile_lays = []
-        @fulfilled_main_line_hexes = []
+
         @main_line_built = {
-          'M-S' => [],
-          'G-S' => [],
-          'L-S' => [],
+          'M-S' => 0,
+          'G-S' => 0,
+          'L-S' => 0,
         }
 
         # Create virtual SJ corporation
@@ -213,11 +227,19 @@ module Engine
         @sj.owner = @bank
 
         @pending_nationalization = false
-        @gkb_bonus = 0
+
+        @e_train_bought = false
+        @sj_tokens_passable = false
       end
 
       def cert_limit
         current_cert_limit
+      end
+
+      def num_certs(entity)
+        count = super
+        count -= 1 if priority_deal_chooser&.owner == entity
+        count
       end
 
       def new_auction_round
@@ -244,10 +266,9 @@ module Engine
           Step::G18SJ::BuyCompany,
           Step::G18SJ::IssueShares,
           Step::HomeToken,
-          Step::Track,
+          Step::G18SJ::Track,
           Step::Token,
           Step::G18SJ::BuyTrainBeforeRunRoute,
-          Step::G18SJ::SpecialBuy,
           Step::G18SJ::Route,
           Step::G18SJ::Dividend,
           Step::SpecialBuyTrain,
@@ -256,29 +277,27 @@ module Engine
         ], round_num: round_num)
       end
 
-      def action_processed(action)
-        is_tile_lay = action.is_a?(Action::LayTile)
-        check_second_lay(action) if is_tile_lay && !@tile_lays.empty? && !special_tile_lay?(action)
+      # Check if tile lay action improves a main line hex
+      # If it does return the main line name
+      # If not remove nil
+      # Side effect: Remove the main line icon from the hex if improvement is done
+      def main_line_improvement(action)
+        main_line_icon = action.hex.tile.icons.find { |i| MAIN_LINE_ICONS.include?(i.name) }
+        return if !main_line_icon || !connects_main_line?(action.hex)
 
-        super
-
-        return if !is_tile_lay || special_tile_lay?(action)
-
-        remove_main_line_bonus(action)
-        @tile_lays << action
+        main_line_icon_name = main_line_icon.name
+        @log << "Main line #{MAIN_LINE_DESCRIPTION[main_line_icon_name]} was "\
+          "#{main_line_completed?(main_line_icon_name) ? 'completed!' : 'improved'}"
+        remove_icon(action.hex, [main_line_icon_name])
       end
 
       def special_tile_lay(action)
-        @special_tile_lays << action.hex.name
-      end
-
-      def special_tile_lay?(action)
-        @special_tile_lays.include?(action.hex.name)
+        @special_tile_lays << action
       end
 
       def redeemable_shares(entity)
         return [] unless entity.corporation?
-        return [] unless round.steps.find { |step| step.class == Step::G18SJ::IssueShares }.active?
+        return [] unless round.steps.find { |step| step.instance_of?(Step::G18SJ::IssueShares) }.active?
 
         share_price = stock_market.find_share_price(entity, :right).price
 
@@ -298,8 +317,8 @@ module Engine
          stockholm_malmo_bonus(icons, stops),
          bergslagen_bonus(icons),
          orefields_bonus(icons),
-         sveabolaget_bonus(route, stops),
-         gkb_bonus(stops)].map { |b| b[:revenue] }.each { |r| revenue += r }
+         sveabolaget_bonus(route),
+         gkb_bonus(route)].map { |b| b[:revenue] }.each { |r| revenue += r }
 
         return revenue unless route.train.name == 'E'
 
@@ -323,26 +342,19 @@ module Engine
          stockholm_malmo_bonus(icons, stops),
          bergslagen_bonus(icons),
          orefields_bonus(icons),
-         sveabolaget_bonus(route, stops),
-         gkb_bonus(stops)].map { |b| b[:description] }.compact.each { |d| str += " + #{d}" }
+         sveabolaget_bonus(route),
+         gkb_bonus(route)].map { |b| b[:description] }.compact.each { |d| str += " + #{d}" }
 
         str
       end
 
-      def clean_up_after_entity
-        @tile_lays = []
-
-        # Reset possible gkb bonus
-        @gkb_bonus = 0
-
+      def clean_up_after_dividend
         # Remove Gellivare Company tile lay ability if it has been used this OR
         abilities(gc, :tile_lay) do |ability|
-          company.remove_ability(ability)
+          gc.remove_ability(ability)
           @log << "#{gc.name} tile lay ability removed"
         end unless @special_tile_lays.empty?
         @special_tile_lays = []
-
-        return unless @round.current_entity
 
         make_sj_tokens_impassable
       end
@@ -351,13 +363,17 @@ module Engine
       # This is a workaround that is not perfect in case a
       # corporation has E train + other train, but very unlikely
       def make_sj_tokens_passable_for_electric_trains(entity)
-        return unless entity.trains.any? { |t| t.name == 'E' }
+        return if !@e_train_bought || !owns_electric_train?(entity)
 
         @sj.tokens.each { |t| t.type = :neutral }
+        @sj_tokens_passable = true
       end
 
       def make_sj_tokens_impassable
+        return if !@e_train_bought || !@sj_tokens_passable
+
         @sj.tokens.each { |t| t.type = :blocking }
+        @sj_tokens_passable = false
       end
 
       def event_close_companies!
@@ -367,7 +383,7 @@ module Engine
         return if minor_khj.closed?
 
         @log << "Minor #{minor_khj.name} closes and its home token is removed"
-        minor_khj.spend(minor_khj.cash, p)
+        minor_khj.spend(minor_khj.cash, @bank) if minor_khj.cash.positive?
         minor_khj.tokens.first.remove!
         minor_khj.close!
       end
@@ -376,7 +392,7 @@ module Engine
         @corporations
           .select { |c| c.percent_of(c) == 100 && !c.closed? }
           .each do |c|
-            @log << "#{c.name} becomes full capitalization as not pared"
+            @log << "#{c.name} becomes full capitalization corporation as it has not been parred"
             c.capitalization = :full
           end
       end
@@ -436,70 +452,28 @@ module Engine
         end
       end
 
+      def buy_electric_train
+        @e_train_bought = true
+      end
+
       private
 
-      def check_second_lay(action)
-        last_tile_lay = @tile_lays.first
-
-        if !main_line_lay?(last_tile_lay) && !main_line_lay?(action)
-          game_error('Second tile lay or upgrade only allowed if first or second improves the main line!')
-        end
-
-        @log << "#{last_tile_lay.entity.name} gets extra tile lay/upgrade as main line improvement."
-      end
-
-      def main_line_lay?(action)
-        return false unless action
-        return false unless @main_line_hexes.include?(action.hex)
-        return true if @fulfilled_main_line_hexes.include?(main_line_lay(action))
-        return false if main_line_fulfilled_by_other?(action)
-
-        main_line_hex?(action.hex) && connects_main_line?(action.hex)
-      end
-
-      def main_line_fulfilled_by_other?(action)
-        return false if @fulfilled_main_line_hexes.include?(main_line_lay(action))
-
-        @fulfilled_main_line_hexes.each do |info|
-          return true if info[:hex_name] == action.hex.name && info[:tile_name] != action.tile.name
-        end
-        false
-      end
-
       def main_line_hex?(hex)
-        MAIN_LINE_INFO[hex.name]
+        MAIN_LINE_ORIENTATION[hex.name]
       end
 
       def connects_main_line?(hex)
-        info = MAIN_LINE_INFO[hex.name]
-        return unless info
+        return unless (orientation = MAIN_LINE_ORIENTATION[hex.name])
 
-        orientation = info[:orientation]
         edge1 = "#{hex.name}_#{orientation[0]}_0"
         edge2 = "#{hex.name}_#{orientation[1]}_0"
         edges = hex.tile.paths.flat_map(&:edges).map(&:id)
         edges.include?(edge1) && edges.include?(edge2)
       end
 
-      def remove_main_line_bonus(action)
-        return unless main_line_lay?(action)
-
-        lay = main_line_lay(action)
-        return if @fulfilled_main_line_hexes.include?(lay)
-
-        info = MAIN_LINE_INFO[action.hex.name]
-        @fulfilled_main_line_hexes << lay
-        main_line = info[:main_line]
-        @main_line_built[main_line] = (@main_line_built[main_line] << action.hex.name)
-        return if @main_line_built[main_line].size < MAIN_LINE_COUNT[main_line]
-
-        @log << "-- Main line #{MAIN_LINE_DESCRIPTION[main_line]} completed!"
-        @log << 'Removes icons for main line'
-        remove_icons(@main_line_built[main_line], [main_line])
-      end
-
-      def main_line_lay(action)
-        { hex_name: action.hex.name, tile_name: action.tile.name }
+      def main_line_completed?(main_line_icon_name)
+        @main_line_built[main_line_icon_name] += 1
+        @main_line_built[main_line_icon_name] == MAIN_LINE_COUNT[main_line_icon_name]
       end
 
       CERT_LIMITS = {
@@ -512,9 +486,11 @@ module Engine
       def current_cert_limit
         available_corporations = @corporations.count { |c| !c.closed? }
         certs_per_player = CERT_LIMITS[available_corporations]
-        game_error("No cert limit defined for #{available_corporations} corporations") unless certs_per_player
+        raise GameError, "No cert limit defined for #{available_corporations} corporations" unless certs_per_player
+
         set_cert_limit = certs_per_player[@players.size]
-        game_error("No cert limit defined for #{@players.size} players") unless set_cert_limit
+        raise GameError, "No cert limit defined for #{@players.size} players" unless set_cert_limit
+
         set_cert_limit
       end
 
@@ -653,12 +629,13 @@ module Engine
         bonus
       end
 
-      def sveabolaget_bonus(route, stops)
+      def sveabolaget_bonus(route)
         bonus = { revenue: 0 }
 
         steam = sveabolaget&.id
         revenue = 0
-        if route.corporation == sveabolaget&.owner && (port = stops.map(&:hex).find { |hex| hex.assigned?(steam) })
+        if route.corporation == sveabolaget&.owner &&
+           (port = route.stops.map(&:hex).find { |hex| hex.assigned?(steam) })
           revenue += 30 * port.tile.icons.select { |icon| icon.name == 'port' }.size
         end
         if revenue.positive?
@@ -669,24 +646,23 @@ module Engine
         bonus
       end
 
-      def gkb_bonus(stops)
+      def gkb_bonus(route)
         bonus = { revenue: 0 }
 
-        return bonus unless @gkb_bonus.positive?
+        return bonus if !route.abilities || route.abilities.empty?
+        raise GameError, "Only one ability supported: #{route.abilities}" if route.abilities.size > 1
 
-        revenue = 0
-        stops.select { |s| GKB_HEXES.include?(s.hex.name) }.each { |_s| revenue += @gkb_bonus }
-        if revenue.positive?
-          bonus[:revenue] = revenue
+        ability = abilities(route.train.owner, route.abilities.first, time: 'route')
+        raise GameError, "Cannot find ability #{route.abilities.first}" unless ability
+
+        bonuses = route.stops.count { |s| ability.hexes.include?(s.hex.name) }
+        if bonuses.positive?
+          bonus[:revenue] = ability.amount * bonuses
           bonus[:description] = 'GKB'
+          bonus[:description] += "x#{bonuses}" if bonuses > 1
         end
 
         bonus
-      end
-
-      def buy_gkb_bonus(count)
-        game_error('No bonuses remains to be bought') unless count.positive?
-        @gkb_bonus = GKB_BONUSES[count]
       end
 
       def close_cleanup(company)
@@ -707,11 +683,13 @@ module Engine
       end
 
       def remove_icons(to_be_cleaned, icon_names)
-        @hexes.each do |hex|
-          next unless to_be_cleaned.include?(hex.name)
+        @hexes.each { |hex| remove_icon(hex, icon_names) if to_be_cleaned.include?(hex.name) }
+      end
 
+      def remove_icon(hex, icon_names)
+        icon_names.each do |name|
           icons = hex.tile.icons
-          icons.reject! { |i| icon_names.include?(i.name) }
+          icons.reject! { |i| name == i.name }
           hex.tile.icons = icons
         end
       end
@@ -723,6 +701,10 @@ module Engine
 
       def tokened_hex_by(hex, corporation)
         hex.tile.cities.any? { |c| c.tokened_by?(corporation) }
+      end
+
+      def owns_electric_train?(entity)
+        entity.trains.any? { |t| t.name == 'E' }
       end
     end
   end

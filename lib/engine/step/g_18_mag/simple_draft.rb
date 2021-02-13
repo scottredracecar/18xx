@@ -8,13 +8,15 @@ module Engine
       class SimpleDraft < Base
         ACTIONS = %w[bid].freeze
         MAX_NUM_MINORS = {
+          2 => 3,
           3 => 4,
           4 => 3,
           5 => 2,
-          6 => 1,
+          6 => 2,
         }.freeze
 
         MAX_NUM_SHARES = {
+          2 => 1,
           3 => 2,
           4 => 1,
           5 => 2,
@@ -22,6 +24,7 @@ module Engine
         }.freeze
 
         LEFTOVER_NUM_MINORS = {
+          2 => 1,
           3 => 1,
           4 => 1,
           5 => 3,
@@ -29,6 +32,7 @@ module Engine
         }.freeze
 
         LEFTOVER_NUM_SHARES = {
+          2 => 2,
           3 => 1,
           4 => 3,
           5 => 4,
@@ -142,6 +146,7 @@ module Engine
             @log << "Minor #{minor.name} is removed from the game"
             hex = @game.hex_by_id(minor.coordinates)
             hex.tile.cities[minor.city || 0].remove_tokens!
+            hex.tile.cities[minor.city || 0].remove_reservation!(minor)
 
             @game.minors.delete(minor)
           end

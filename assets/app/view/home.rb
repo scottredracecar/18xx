@@ -1,6 +1,7 @@
 # frozen_string_literal: true
 
 require 'game_manager'
+require 'lib/params'
 require 'lib/settings'
 require 'lib/storage'
 require 'view/chat'
@@ -12,49 +13,51 @@ module View
     include GameManager
     include Lib::Settings
 
-    needs :user
+    needs :autoscroll, default: true, store: true
     needs :refreshing, default: nil, store: true
+    needs :user
 
     def render
-      your_games, other_games = @games.partition { |game| user_in_game?(@user, game) || user_owns_game?(@user, game) }
+      type = Lib::Params['games'] || (@user ? 'personal' : 'all')
+      status = Lib::Params['status'] || 'active'
 
       children = [
         render_header,
-        h(Welcome, show_intro: your_games.size < 2),
+        h(Welcome, show_intro: !@user),
         h(Chat, user: @user, connection: @connection),
       ]
 
-      # these will show up in the profile page
-      your_games.reject! { |game| game['status'] == 'finished' }
+      acting = false
 
-      grouped = other_games.group_by { |game| game['status'] }
+      case type
+      when 'personal'
+        if @games.any? { |game| user_is_acting?(@user, game) }
+          acting = true
+          @games.sort_by! { |game| user_is_acting?(@user, game) ? -game['updated_at'] : 0 }
+        end
+        render_row(children, "Your #{status.capitalize} Games", @games, :personal, status)
+      when 'hs'
+        hs_games = Lib::Storage
+          .all_keys
+          .select { |k| k.start_with?('hs_') }
+          .map { |k| Lib::Storage[k] }
+          .sort_by { |gd| gd[:id] }
+          .reverse
 
-      # Ready, then active, then unstarted, then completed
-      your_games.sort_by! do |game|
-        [
-          user_is_acting?(@user, game) ? -game['updated_at'] : 0,
-          game['status'] == 'active' ? -game['updated_at'] : 0,
-          game['status'] == 'new' ? -game['created_at'] : 0,
-          -game['updated_at'],
-        ]
+        render_row(children, 'Hotseat Games', hs_games, :hs, 'all')
+      else
+        render_row(children, "#{status.capitalize} Games", @games, :all, status)
       end
 
-      hotseat = Lib::Storage
-        .all_keys
-        .select { |k| k.start_with?('hs_') }
-        .map { |k| Lib::Storage[k] }
-        .sort_by { |gd| gd[:id] }
-        .reverse
-
-      render_row(children, 'Your Games', your_games, :personal) if @user
-      render_row(children, 'Hotseat Games', hotseat, :hotseat) if hotseat.any?
-      render_row(children, 'New Games', grouped['new'], :new) if @user
-      render_row(children, 'Active Games', grouped['active'], :active)
-      render_row(children, 'Finished Games', grouped['finished'], :finished)
+      # without timeout element might not exist
+      `setTimeout(function(){
+        document.getElementById('games_list').scrollIntoView();
+        window.scrollBy(0, -55);
+      }, 100);` if @autoscroll == true && @app_route != '/'
+      store(:autoscroll, false, skip: true)
 
       game_refresh
 
-      acting = your_games.any? { |game| user_is_acting?(@user, game) }
       `document.title = #{(acting ? '* ' : '') + '18xx.Games'}`
       change_favicon(acting)
       change_tab_color(acting)
@@ -88,20 +91,19 @@ module View
       store(:refreshing, timeout, skip: true)
     end
 
-    def render_row(children, header, games, type)
-      return unless games&.any?
-
+    def render_row(children, header, games, type, status = 'active')
       children << h(
         GameRow,
         header: header,
         game_row_games: games,
+        status: status,
         type: type,
         user: @user,
       )
     end
 
     def render_header
-      h('div#greeting.card_header', [
+      h('div#greeting', [
         h(:h2, "Welcome#{@user ? ' ' + @user['name'] : ''}!"),
       ])
     end

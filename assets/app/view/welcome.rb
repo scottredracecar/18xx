@@ -17,9 +17,9 @@ module View
 
     def render_notification
       message = <<~MESSAGE
-        <p>You can now click on the log to view history or undo to any point in time!</p>
-        <p>18Chesapeake After Dark has been renamed to be 18Chesapeake Off The Rails.</p>
-
+        <p>1830 is now in alpha!</p>
+        <p>1860 now in production!</p>
+        <p>18Mag and 1849 now in beta 🚂🚂!</p>
         <p>Please file <a href='https://github.com/tobymao/18xx/issues'>issues and ideas</a> on
         <a href='https://github.com/tobymao/18xx/issues'>GitHub</a>.<br>
         If you have any questions, check out the <a href="https://github.com/tobymao/18xx/wiki/FAQ">FAQ</a> and other
@@ -54,7 +54,6 @@ module View
     def render_introduction
       message = <<~MESSAGE
         <p>18xx.games is a website where you can play async or real-time 18xx games (based on the system originally devised by the brilliant Francis Tresham)!
-        <p>Right now, 1817, 1817NA, 1817WO, 1836Jr30, 1846, 1860, 1867, 1882, 1889, 18AL, 18Chesapeake, 18CO: Rock & Stock, 18GA, 18 Los Angeles, 18MEX, 18MS, 18SJ, and 18TN are implemented.</br>
         If you are new to 18xx games then 1889, 18Chesapeake, or 18MS are good games to begin with.</p>
 
         <p>You can play locally with hot seat mode without an account. If you want to play multiplayer, you'll need to create an account.</p>
@@ -67,7 +66,12 @@ module View
       MESSAGE
 
       props = {
-        props: { innerHTML: message },
+        style: {
+          marginBottom: '1rem',
+        },
+        props: {
+          innerHTML: message,
+        },
       }
 
       h('div#introduction', props)

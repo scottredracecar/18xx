@@ -35,13 +35,16 @@ module Engine
         true
       end
 
-      def pass_auction(entity)
-        @log << "#{entity.name} passes on #{auctioning.name}"
-
+      def remove_from_auction(entity)
         @bids[auctioning]&.reject! do |bid|
           bid.entity == entity
         end
         resolve_bids
+      end
+
+      def pass_auction(entity)
+        @log << "#{entity.name} passes on #{auctioning.name}"
+        remove_from_auction(entity)
       end
 
       def min_increment
@@ -63,6 +66,10 @@ module Engine
       def min_bid(_company)
         # Minimum a bid that an entity can bid
         raise NotImplementedError
+      end
+
+      def max_place_bid(entity, company)
+        max_bid(entity, company)
       end
 
       def max_bid(_entity, _company)

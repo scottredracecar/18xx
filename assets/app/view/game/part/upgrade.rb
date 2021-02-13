@@ -21,6 +21,12 @@ module View
           y: -60,
         }.freeze
 
+        P_BOTTOM_RIGHT_CORNER = {
+          region_weights: [22, 23],
+          x: 30,
+          y: 60,
+        }.freeze
+
         P_BOTTOM_LEFT_CORNER = {
           region_weights: [19, 20],
           x: -30,
@@ -57,6 +63,7 @@ module View
             P_BOTTOM_LEFT_CORNER,
             P_RIGHT_CORNER,
             P_LEFT_CORNER,
+            P_BOTTOM_RIGHT_CORNER,
           ]
         end
 
@@ -74,6 +81,7 @@ module View
               desert: svg(delta_x: delta_x, delta_y: delta_y, icon: 'cactus'),
               lake: svg(delta_x: delta_x, delta_y: delta_y, icon: 'lake'),
               river: svg(delta_x: delta_x, delta_y: delta_y, icon: 'river'),
+              hill: svg(delta_x: delta_x, delta_y: delta_y, icon: 'hill'),
             }[t]
           end
 
@@ -83,9 +91,11 @@ module View
         end
 
         def mountain(delta_x: 0, delta_y: 0)
-          h(:polygon, attrs: { transform: "translate(#{delta_x} #{delta_y})",
-                               fill: '#cb7745',
-                               points: TRIANGLE_PATH })
+          h(:polygon, attrs: {
+              transform: "translate(#{delta_x} #{delta_y})",
+              fill: '#cb7745',
+              points: TRIANGLE_PATH,
+            })
         end
 
         def water(delta_x: 0, delta_y: 0)
@@ -94,7 +104,7 @@ module View
           ])
         end
 
-        def svg(delta_x: 0, delta_y: 0, icon:)
+        def svg(icon:, delta_x: 0, delta_y: 0)
           h(
             :image, attrs: {
               href: "/icons/#{icon}.svg",

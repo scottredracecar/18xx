@@ -12,8 +12,10 @@ module View
 
       needs :player
       needs :game
+      needs :user, default: nil, store: true
       needs :display, default: 'inline-block'
       needs :show_hidden, default: false
+      needs :hide_logo, store: true, default: false
 
       def render
         card_style = {
@@ -29,6 +31,10 @@ module View
 
         if @player.companies.any? || @show_hidden
           divs << h(Companies, owner: @player, game: @game, show_hidden: @show_hidden)
+        end
+
+        unless (minors = @game.player_card_minors(@player)).empty?
+          divs << render_minors(minors)
         end
 
         h('div.player.card', { style: card_style }, divs)
@@ -95,6 +101,13 @@ module View
               h('td.right', @game.format_currency(@player.cash - committed)),
             ]),
           ]) if committed.positive?
+
+          trs.concat([
+             h(:tr, [
+               h(:td, 'Bidding tokens'),
+               h('td.right', "#{@game.active_step.bidding_tokens(@player)} / #{@game.bidding_token_per_player}"),
+             ]),
+           ]) if @game.active_step.respond_to?(:bidding_tokens)
         end
 
         trs.concat([
@@ -106,7 +119,7 @@ module View
             h(:td, 'Liquidity'),
             h('td.right', @game.format_currency(@game.liquidity(@player))),
           ]),
-])
+        ])
 
         if @game.respond_to?(:bidding_power)
           trs << h(:tr, [
@@ -116,7 +129,7 @@ module View
         end
         trs << h(:tr, [
           h(:td, 'Certs'),
-          h('td.right', td_cert_props, "#{num_certs}/#{cert_limit}"),
+          h('td.right', td_cert_props, @game.show_game_cert_limit? ? "#{num_certs}/#{cert_limit}" : num_certs.to_s),
         ])
 
         priority_props = {
@@ -128,9 +141,10 @@ module View
           },
         }
 
-        trs << render_priority_deal(priority_props) if @game.class::NEXT_SR_PLAYER_ORDER == :after_last_to_act &&
+        order = @game.next_sr_player_order
+        trs << render_priority_deal(priority_props) if order == :after_last_to_act &&
                                                        @player == @game.priority_deal_player
-        trs << render_next_sr_position(priority_props) if @game.class::NEXT_SR_PLAYER_ORDER == :first_to_pass &&
+        trs << render_next_sr_position(priority_props) if order == :first_to_pass &&
                                                           @game.next_sr_position(@player)
 
         h(:table, trs)
@@ -174,19 +188,47 @@ module View
         }
         logo_props = {
           attrs: {
-            src: corporation.logo,
+            src: @user&.dig('settings', 'simple_logos') ? corporation.simple_logo : corporation.logo,
           },
           style: {
             height: '20px',
           },
         }
 
+        children = []
+        children << h('td.center', td_props, [h(:div, div_props, [h(:img, logo_props)])]) unless @hide_logo
+
         president_marker = corporation.president?(@player) ? '*' : ''
-        h('tr.row', [
-          h('td.center', td_props, [h(:div, div_props, [h(:img, logo_props)])]),
-          h(:td, td_props, corporation.name + president_marker),
-          h('td.right', td_props, "#{shares.sum(&:percent)}%"),
-        ])
+        children << h(:td, td_props, corporation.name + president_marker)
+        children << h('td.right', td_props, "#{shares.sum(&:percent)}%")
+        h('tr.row', children)
+      end
+
+      def render_minors(minors)
+        minor_logos = minors.map do |minor|
+          logo_props = {
+            attrs: {
+              src: minor.logo,
+            },
+            style: {
+              paddingRight: '1px',
+              paddingLeft: '1px',
+              height: '20px',
+            },
+          }
+          h(:img, logo_props)
+        end
+        inner_props = {
+          style: {
+            display: 'inline-block',
+          },
+        }
+        outer_props = {
+          style: {
+            textAlign: 'center',
+          },
+        }
+        h('div', outer_props, [h('div', inner_props, minor_logos)])
       end
     end
   end

@@ -7,9 +7,10 @@ module Engine
   module Game
     class G1817WO < G1817
       attr_reader :new_zealand_city
+
       load_from_json(Config::Game::G1817WO::JSON)
 
-      DEV_STAGE = :alpha
+      DEV_STAGE = :production
       GAME_PUBLISHER = nil
       PITTSBURGH_PRIVATE_NAME = 'PSM'
       PITTSBURGH_PRIVATE_HEX = 'I6'
@@ -23,6 +24,8 @@ module Engine
       }.freeze
       GAME_DESIGNER = 'Mark Voyer & Brennan Sheremeto'
       EVENTS_TEXT = G1817::EVENTS_TEXT.merge('nieuw_zeeland_available' => ['Nieuw Zealand opens for new IPOs'])
+      MAX_LOAN = 65
+      LOANS_PER_INCREMENT = 3
 
       def self.title
         '1817WO'
@@ -42,16 +45,6 @@ module Engine
         @green_token.remove!
       end
 
-      # Not genericifying 1817's loan logic just so it can be kept simpler, at least for now
-      def init_loans
-        @loan_value = 100
-        39.times.map { |id| Loan.new(id, @loan_value) }
-      end
-
-      def future_interest_rate
-        [[5, ((loans_taken + 2) / 3).to_i * 5].max, 65].min
-      end
-
       def interest_owed(entity)
         return super unless corp_has_new_zealand?(entity)
         # A corporation with a token in new zealand gets $20 if it doesn't have any loans
@@ -68,7 +61,7 @@ module Engine
       # This must be overridden to use 1817WO step
       def redeemable_shares(entity)
         return [] unless entity.corporation?
-        return [] unless round.steps.find { |step| step.class == Step::G1817WO::BuySellParShares }.active?
+        return [] unless round.steps.find { |step| step.instance_of?(Step::G1817WO::BuySellParShares) }.active?
 
         bundles_for_corporation(share_pool, entity)
           .reject { |bundle| entity.cash < bundle.price }
@@ -178,24 +171,6 @@ module Engine
           Step::HomeToken,
           Step::G1817WO::BuySellParShares,
         ])
-      end
-
-      def interest_change
-        rate = future_interest_rate
-        summary = []
-        unless rate == 5
-          loans = ((loans_taken - 1) % 3) + 1
-          s = loans == 1 ? '' : 's'
-          summary << ["Interest if #{loans} more loan#{s} repaid", rate - 5]
-        end
-        if loans_taken.zero?
-          summary << ['Interest if 4 more loans taken', 10]
-        elsif rate != 65
-          loans = 3 - ((loans_taken + 2) % 3) # Is this right?
-          s = loans == 1 ? '' : 's'
-          summary << ["Interest if #{loans} more loan#{s} taken", rate + 5]
-        end
-        summary
       end
     end
   end

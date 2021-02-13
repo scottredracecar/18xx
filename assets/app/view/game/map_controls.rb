@@ -1,27 +1,41 @@
 # frozen_string_literal: true
 
-require '../lib/storage'
+require 'lib/settings'
+require 'lib/storage'
 
 module View
   module Game
     class MapControls < Snabberb::Component
+      include Lib::Settings
       needs :show_coords, default: nil, store: true
       needs :show_location_names, default: true, store: true
       needs :show_starting_map, default: false, store: true
       needs :historical_routes, default: [], store: true
       needs :game, default: nil, store: true
-      needs :map_zoom, default: nil, store: true
+      needs :show_player_colors, default: nil, store: true
 
       def render
         children = [
+          player_colors_controls,
           location_names_controls,
           hex_coord_controls,
           starting_map_controls,
-          *route_controls,
-          *map_zoom_controls,
+          route_controls,
         ].compact
 
         h(:div, children)
+      end
+
+      def player_colors_controls
+        show_player_colors = Lib::Storage['show_player_colors']
+
+        on_click = lambda do
+          new_value = !show_player_colors
+          Lib::Storage['show_player_colors'] = new_value
+          store(:show_player_colors, new_value)
+        end
+
+        render_button("#{show_player_colors ? 'Hide' : 'Show'} Player Colors", on_click)
       end
 
       def location_names_controls
@@ -107,7 +121,7 @@ module View
         end
 
         @route_input = render_select(id: :route, on: { input: route_change }, children: operators)
-        ['Show Last Route For:', @route_input]
+        h('label.inline-block', ['Show Last Route For:', @route_input])
       end
 
       def render_select(id:, on: {}, children: [])
@@ -120,34 +134,14 @@ module View
         h(:select, input_props, children)
       end
 
-      def map_zoom_controls
-        on_click = lambda do |z|
-          lambda do
-            store(:map_zoom, z)
-            Lib::Storage['map_zoom'] = z
-          end
-        end
-
-        [render_button('Zoom out', on_click.call(@map_zoom / 1.1)),
-         render_button('Default zoom', on_click.call(1)),
-         render_button('Zoom in', on_click.call(@map_zoom * 1.1))]
-      end
-
       def render_button(text, action)
         props = {
-          style: {
-            top: '1rem',
-            # float: 'right',
-            borderRadius: '5px',
-            margin: '0 0.3rem',
-            padding: '0.2rem 0.5rem',
-          },
           on: {
             click: action,
           },
         }
 
-        h(:button, props, text)
+        h('button.small', props, text)
       end
     end
   end

@@ -255,7 +255,7 @@ module Engine
       "abilities": [
         {
           "type": "close",
-          "when": 6
+          "on_phase": "6"
         },
         {
           "type": "blocks_hexes",
@@ -266,7 +266,7 @@ module Engine
         },
         {
           "type": "exchange",
-          "corporation": "SC",
+          "corporations": ["SC"],
           "owner_type": "player",
           "from": "par"
         }
@@ -287,11 +287,12 @@ module Engine
           ],
           "price": 0,
           "teleport_price": 0,
+          "when": ["special_track", "owning_corp_or_turn"],
           "count": 1
         },
         {
           "type": "tile_lay",
-          "when": "track",
+          "when": ["special_track", "owning_corp_or_turn"],
           "owner_type": "corporation",
           "count": 1,
           "hexes": [

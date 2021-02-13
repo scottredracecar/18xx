@@ -1,7 +1,7 @@
 # frozen_string_literal: true
 
 require_relative '../config/game/g_1817'
-require_relative '../loan.rb'
+require_relative '../loan'
 require_relative 'base'
 require_relative 'interest_on_loans'
 
@@ -48,7 +48,7 @@ module Engine
       POOL_SHARE_DROP = :each
       SELL_MOVEMENT = :none
       ALL_COMPANIES_ASSIGNABLE = true
-      SELL_AFTER = :operate
+      SELL_AFTER = :after_ipo
       DEV_STAGE = :production
       OBSOLETE_TRAINS_COUNT_FOR_LIMIT = true
 
@@ -62,7 +62,10 @@ module Engine
       CERT_LIMIT_CHANGE_ON_BANKRUPTCY = true
 
       # Two lays with one being an upgrade, second tile costs 20
-      TILE_LAYS = [{ lay: true, upgrade: true }, { lay: true, upgrade: :not_if_upgraded, cost: 20 }].freeze
+      TILE_LAYS = [
+        { lay: true, upgrade: true },
+        { lay: true, upgrade: :not_if_upgraded, cost: 20, cannot_reuse_same_hex: true },
+      ].freeze
 
       LIMIT_TOKENS_AFTER_MERGER = 8
 
@@ -81,19 +84,37 @@ module Engine
       CORPORATION_SIZES = { 2 => :small, 5 => :medium, 10 => :large }.freeze
 
       OPTIONAL_RULES = [
-        { sym: :short_squeeze,
+        {
+          sym: :short_squeeze,
           short_name: 'Short Squeeze',
-          desc: '100% sold out corporations move twice at end of SR' },
-        { sym: :five_shorts,
+          desc: 'Corporations with > 100% player ownership move a second time at end of SR',
+        },
+        {
+          sym: :five_shorts,
           short_name: '5 Shorts',
-          desc: 'Only allow 5 shorts on 10 share corporations' },
-        { sym: :modern_trains,
+          desc: 'Only allow 5 shorts on 10 share corporations',
+        },
+        {
+          sym: :modern_trains,
           short_name: 'Modern Trains',
-          desc: '7 & 8 trains earn $10 & $20 respectively for each station marker of the corporation' },
+          desc: '7 & 8 trains earn $10 & $20 respectively for each station marker of the corporation',
+        },
       ].freeze
+
+      MIN_LOAN = 5
+      MAX_LOAN = 70
+      LOANS_PER_INCREMENT = 5
+      LOAN_INTEREST_INCREMENTS = 5
 
       include InterestOnLoans
       attr_reader :loan_value, :owner_when_liquidated, :stock_prices_start_merger
+
+      def timeline
+        @timeline = [
+          'At the end of each OR the next available train will be exported
+           (removed, triggering phase change as if purchased)',
+        ]
+      end
 
       def init_cert_limit
         @log << '1817 has not been tested thoroughly with more than seven players.' if @players.size > 7
@@ -126,12 +147,27 @@ module Engine
         @players.reject(&:bankrupt).one?
       end
 
+      def init_loans
+        @loan_value = 100
+        loan_increments = ((self.class::MAX_LOAN - self.class::MIN_LOAN) / self.class::LOAN_INTEREST_INCREMENTS + 1)
+        total_loans = loan_increments * self.class::LOANS_PER_INCREMENT
+        total_loans.times.map { |id| Loan.new(id, @loan_value) }
+      end
+
       def future_interest_rate
-        [[5, ((loans_taken + 4) / 5).to_i * 5].max, 70].min
+        interest = ((loans_taken + (self.class::LOANS_PER_INCREMENT - 1)) /
+                   self.class::LOANS_PER_INCREMENT).to_i *
+                   self.class::LOAN_INTEREST_INCREMENTS
+
+        [[self.class::MIN_LOAN, interest].max, self.class::MAX_LOAN].min
       end
 
       def interest_rate
         @interest_fixed || future_interest_rate
+      end
+
+      def loans_due_interest(entity)
+        entity.loans.size
       end
 
       def interest_owed_for_loans(loans)
@@ -145,27 +181,36 @@ module Engine
       def interest_change
         rate = future_interest_rate
         summary = []
-        unless rate == 5
-          loans = ((loans_taken - 1) % 5) + 1
+
+        unless rate == self.class::MIN_LOAN
+          loans = ((loans_taken - 1) % self.class::LOANS_PER_INCREMENT) + 1
           s = loans == 1 ? '' : 's'
           summary << ["Interest if #{loans} more loan#{s} repaid", rate - 5]
         end
+        loan_table = []
         if loans_taken.zero?
-          summary << ['Interest if 6 more loans taken', 10]
-        elsif rate != 70
-          loans = 5 - ((loans_taken + 4) % 5)
+          loan_table << [rate, self.class::LOANS_PER_INCREMENT]
+          summary << ["Interest if #{self.class::LOANS_PER_INCREMENT + 1} more loans taken", 10]
+        elsif rate != self.class::MAX_LOAN
+          loans = self.class::LOANS_PER_INCREMENT - ((loans_taken + (self.class::LOANS_PER_INCREMENT - 1)) %
+                  self.class::LOANS_PER_INCREMENT)
+          loan_table << [rate, loans - 1]
           s = loans == 1 ? '' : 's'
-          summary << ["Interest if #{loans} more loan#{s} taken", rate + 5]
+          summary << ["Interest if #{loans} more loan#{s} taken", rate + self.class::LOAN_INTEREST_INCREMENTS]
         end
-        summary
+
+        (rate + self.class::LOAN_INTEREST_INCREMENTS..self.class::MAX_LOAN).step(5) do |r|
+          loan_table << [r, self.class::LOANS_PER_INCREMENT]
+        end
+        [summary, loan_table]
       end
 
       def format_currency(val)
         # On dividends per share can be a float
         # But don't show decimal points on all
-        return format('$%.1<val>f', val: val) if val.is_a?(Float) && (val % 1 != 0)
+        return super if (val % 1).zero?
 
-        self.class::CURRENCY_FORMAT_STR % val
+        format('$%.1<val>f', val: val)
       end
 
       def maximum_loans(entity)
@@ -176,6 +221,10 @@ module Engine
         player.cash + player.companies.sum(&:value)
       end
 
+      def operating_order
+        super.reject { |c| c.share_price.liquidation? }
+      end
+
       def home_token_locations(corporation)
         hexes.select do |hex|
           hex.tile.cities.any? { |city| city.tokenable?(corporation, free: true) }
@@ -184,7 +233,7 @@ module Engine
 
       def redeemable_shares(entity)
         return [] unless entity.corporation?
-        return [] unless round.steps.find { |step| step.class == Step::G1817::BuySellParShares }.active?
+        return [] unless round.steps.find { |step| step.is_a?(Step::BuySellParShares) }.active?
         return [] if entity.share_price.acquisition? || entity.share_price.liquidation?
 
         bundles_for_corporation(share_pool, entity)
@@ -255,6 +304,12 @@ module Engine
         new_shares
       end
 
+      def available_shorts(corporation)
+        return [0, 0] if corporation&.total_shares == 2
+
+        [shorts(corporation).size, corporation.total_shares]
+      end
+
       def shorts(corporation)
         shares = []
 
@@ -287,6 +342,9 @@ module Engine
       def close_bank_shorts
         # Close out shorts in stock market with the bank buying shares from the treasury
         @corporations.each do |corporation|
+          next unless corporation.share_price
+          next if corporation.share_price.acquisition? || corporation.share_price.liquidation?
+
           count = 0
           while entity_shorts(@share_pool, corporation).any? &&
             corporation.shares.any?
@@ -462,10 +520,12 @@ module Engine
       end
 
       def unstarted_corporation_summary
-        (@corporations.count { |c| !c.ipoed }).to_s
+        [(@corporations.count { |c| !c.ipoed }).to_s, []]
       end
 
       def liquidate!(corporation)
+        return if corporation.owner == @share_pool
+
         @owner_when_liquidated[corporation] = corporation.owner
         @stock_market.move(corporation, 0, 0, force: true)
       end
@@ -611,11 +671,6 @@ module Engine
           end
       end
 
-      def init_loans
-        @loan_value = 100
-        70.times.map { |id| Loan.new(id, @loan_value) }
-      end
-
       def round_end
         Round::G1817::Acquisition
       end
@@ -632,7 +687,7 @@ module Engine
         # If we're in round 1, we have another set of ORs with 2 ORs
         # If we're in round 2, we have another set of ORs with 3 ORs
         @final_operating_rounds = @round.round_num == 2 ? 3 : 2
-
+        game_end_check
         @log << "First 8 train bought/exported, ending game at the end of #{@turn + 1}.#{@final_operating_rounds}"
       end
     end

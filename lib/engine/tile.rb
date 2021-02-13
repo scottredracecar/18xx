@@ -14,8 +14,9 @@ module Engine
   class Tile
     include Config::Tile
 
-    attr_accessor :hex, :icons, :index, :legal_rotations, :location_name, :name, :reservations, :upgrades
-    attr_reader :blocks_lay, :borders, :cities, :color, :edges, :junction, :nodes, :label,
+    attr_accessor :blocks_lay, :hex, :icons, :index, :legal_rotations, :location_name,
+                  :name, :opposite, :reservations, :upgrades
+    attr_reader :borders, :cities, :color, :edges, :junction, :nodes, :labels,
                 :parts, :preprinted, :rotation, :stops, :towns, :offboards, :blockers,
                 :city_towns, :unlimited, :stubs, :partitions, :id, :frame
 
@@ -127,11 +128,9 @@ module Engine
         cache << offboard
         offboard
       when 'label'
-        label = Part::Label.new(params)
-        label
+        Part::Label.new(params)
       when 'upgrade'
-        upgrade = Part::Upgrade.new(params['cost'], params['terrain']&.split('|'))
-        upgrade
+        Part::Upgrade.new(params['cost'], params['terrain']&.split('|'))
       when 'border'
         Part::Border.new(params['edge'], params['type'], params['cost'])
       when 'junction'
@@ -190,6 +189,8 @@ module Engine
       @blocks_lay = nil
       @reservation_blocks = opts[:reservation_blocks] || false
       @unlimited = opts[:unlimited] || false
+      @labels = []
+      @opposite = nil
       @id = "#{@name}-#{@index}"
 
       separate_parts
@@ -453,7 +454,12 @@ module Engine
 
     # Used to set label for a recently placed tile
     def label=(label_name)
-      @label = Part::Label.new(label_name)
+      @labels.clear
+      @labels << Part::Label.new(label_name) if label_name
+    end
+
+    def label
+      @labels.last
     end
 
     def restore_borders(edges = nil)
@@ -489,7 +495,7 @@ module Engine
           @cities << part
           @city_towns << part
         elsif part.label?
-          @label = part
+          @labels << part
         elsif part.path?
           @paths << part
         elsif part.town?

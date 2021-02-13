@@ -140,7 +140,7 @@ module Engine
 		"co2": {
 			"count": 1,
 			"color": "green",
-			"code": "city=revenue:50,slots:3;city=revenue:50,hide:1;path=a:0,b:_0;path=a:3,b:_0;path=a:4,b:_0;path=a:5,b:_0;path=a:1,b:_1;path=a:2,b:_1;label=D;"
+			"code": "city=revenue:50,slots:3,loc:16.5;city=revenue:50;path=a:0,b:_0;path=a:3,b:_0;path=a:4,b:_0;path=a:5,b:_0;path=a:1,b:_1;path=a:2,b:_1;label=D;"
 		},
 		"co6": {
 			"count": 1,
@@ -341,7 +341,7 @@ module Engine
 				{
 					"type": "close",
 					"owner_type": "corporation",
-					"when": "6"
+					"on_phase": "6"
 				}
 			]
 		},
@@ -356,7 +356,7 @@ module Engine
 					"type": "tile_lay",
 					"free": true,
 					"owner_type": "corporation",
-					"when": "track",
+					"when": ["track", "special_track"],
 					"count": 1,
 					"special": true,
 					"tiles": [
@@ -396,7 +396,7 @@ module Engine
 			"name": "Denver, Northwestern and Pacific Railroad",
 			"value": 50,
 			"revenue": 10,
-			"desc": "An owning Corporation may return a station token to its charter to gain the token cost. Corporation must always have at least one token on the board. Action closes the company or closes on purchase of “5” train.",
+			"desc": "An owning Corporation may return a station token to its charter to gain the token cost. The token is placed on the rightmost (most expensive) empty token slot with money gained corresponding to empty token slot's price. The corporation must always have at least one token on the board. Action closes the company or closes on purchase of “5” train.",
 			"abilities": [
 				{
 					"type": "return_token",
@@ -502,6 +502,7 @@ module Engine
 			"float_percent": 40,
 			"always_market_price": true,
 			"logo": "18_co/KPAC",
+			"simple_logo": "18_co/KPAC.alt",
 			"tokens": [
 				0,
 				40,
@@ -523,6 +524,7 @@ module Engine
 			"float_percent": 40,
 			"always_market_price": true,
 			"logo": "18_co/CM",
+			"simple_logo": "18_co/CM.alt",
 			"tokens": [
 				0,
 				40,
@@ -546,6 +548,7 @@ module Engine
 			"float_percent": 40,
 			"always_market_price": true,
 			"logo": "18_co/CS",
+			"simple_logo": "18_co/CS.alt",
 			"tokens": [
 				0,
 				40,
@@ -568,6 +571,7 @@ module Engine
 			"float_percent": 40,
 			"always_market_price": true,
 			"logo": "18_co/DPAC",
+			"simple_logo": "18_co/DPAC.alt",
 			"tokens": [
 				0,
 				40
@@ -589,6 +593,7 @@ module Engine
 			"float_percent": 40,
 			"always_market_price": true,
 			"logo": "18_co/DSL",
+			"simple_logo": "18_co/DSL.alt",
 			"tokens": [
 				0,
 				40
@@ -610,6 +615,7 @@ module Engine
 			"float_percent": 50,
 			"always_market_price": true,
 			"logo": "18_co/DRG",
+			"simple_logo": "18_co/DRG.alt",
 			"tokens": [
 				0,
 				40,
@@ -631,11 +637,12 @@ module Engine
 		},
 		{
 			"sym": "ATSF",
-			"name": "Atchinson, Tokepa & Santa Fe",
+			"name": "Atchison, Topeka & Santa Fe",
 			"group": "II",
 			"float_percent": 50,
 			"always_market_price": true,
 			"logo": "18_co/ATSF",
+			"simple_logo": "18_co/ATSF.alt",
 			"tokens": [
 				0,
 				40,
@@ -660,6 +667,7 @@ module Engine
 			"float_percent": 60,
 			"always_market_price": true,
 			"logo": "18_co/CBQ",
+			"simple_logo": "18_co/CBQ.alt",
 			"tokens": [
 				0,
 				40,
@@ -686,6 +694,7 @@ module Engine
 			"float_percent": 60,
 			"always_market_price": true,
 			"logo": "18_co/ROCK",
+			"simple_logo": "18_co/ROCK.alt",
 			"tokens": [
 				0,
 				40,
@@ -712,6 +721,7 @@ module Engine
 			"float_percent": 60,
 			"always_market_price": true,
 			"logo": "18_co/UP",
+			"simple_logo": "18_co/UP.alt",
 			"tokens": [
 				0,
 				40,
@@ -739,6 +749,7 @@ module Engine
 			"float_percent": 20,
 			"always_market_price": true,
 			"logo": "18_co/DSNG",
+			"simple_logo": "18_co/DSNG.alt",
 			"shares":[20, 10, 20, 20, 10, 10, 10],
 			"tokens": [
 				0,
@@ -1184,7 +1195,7 @@ module Engine
 			"upgrade=cost:40,terrain:mountain;border=edge:0,type:mountain,cost:40;border=edge:3,type:mountain,cost:40;border=edge:4,type:mountain,cost:40;border=edge:5,type:mountain,cost:40;": [
 				"H10"
 			],
-			"upgrade=cost:40,terrain:mountain;border=edge:1,type:mountain,cost:40;border=edge:1,type:mountain,cost:40;border=edge:3,type:mountain,cost:40;border=edge:4,type:mountain,cost:40;": [
+			"upgrade=cost:40,terrain:mountain;border=edge:1,type:mountain,cost:40;border=edge:3,type:mountain,cost:40;border=edge:4,type:mountain,cost:40;": [
 				"I15"
 			],
 			"upgrade=cost:40,terrain:mountain;border=edge:1,type:mountain,cost:40;border=edge:2,type:mountain,cost:40;border=edge:3,type:mountain,cost:40;border=edge:4,type:mountain,cost:40;": [

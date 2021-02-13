@@ -12,6 +12,7 @@ module View
       include Lib::Color
       include Lib::Settings
 
+      needs :user, default: nil, store: true
       needs :corporation
       needs :selected_company, default: nil, store: true
       needs :selected_corporation, default: nil, store: true
@@ -58,7 +59,7 @@ module View
         children = [render_title, render_holdings]
 
         unless @corporation.minor?
-          children << render_shares
+          children << render_shares unless @corporation.hide_shares?
           children << render_reserved if @corporation.reserved_shares.any?
           children << render_owned_other_shares if @corporation.corporate_shares.any?
           children << h(Companies, owner: @corporation, game: @game) if @corporation.companies.any?
@@ -90,7 +91,6 @@ module View
           props = {
             style: {
               grid: '1fr / repeat(2, max-content)',
-              gap: '2rem',
               justifyContent: 'center',
               backgroundColor: color_for(:bg2),
               color: color_for(:font2),
@@ -104,8 +104,6 @@ module View
 
         status_props = {
           style: {
-            grid: '1fr / repeat(2, max-content)',
-            gap: '2rem',
             justifyContent: 'center',
             backgroundColor: color_for(:bg2),
             color: color_for(:font2),
@@ -115,7 +113,9 @@ module View
         if @corporation.trains.any? && !@corporation.floated?
           children << h(:div, status_props, @game.float_str(@corporation))
         end
-        children << h(:div, status_props, render_status) if @game.status_str(@corporation)
+        if @game.status_str(@corporation)
+          children << h('div.bold.xsmall_font', status_props, @game.status_str(@corporation))
+        end
 
         h('div.corp.card', { style: card_style, on: { click: select_corporation } }, children)
       end
@@ -123,61 +123,60 @@ module View
       def render_title
         title_row_props = {
           style: {
-            grid: '1fr / auto auto',
-            padding: '0.2rem 0.4rem',
+            grid: '1fr / auto 1fr auto',
+            gap: '0 0.4rem',
+            padding: '0.2rem 0.35rem',
             background: @corporation.color,
             color: @corporation.text_color,
             height: '2.4rem',
           },
         }
         logo_props = {
-          attrs: { src: @corporation.logo },
+          attrs: { src: logo_for_user(@corporation) },
           style: {
             height: '1.6rem',
             width: '1.6rem',
             padding: '1px',
-            alignSelf: 'center',
-            justifySelf: 'start',
             border: '2px solid currentColor',
             borderRadius: '0.5rem',
           },
         }
-        name_props = {
-          style: {
-            color: 'currentColor',
-            display: 'inline-block',
-            justifySelf: 'start',
-          },
-        }
+        children = [h(:img, logo_props), h('div.title', @corporation.full_name)]
 
-        h('div.corp__title', title_row_props, [
-          h(:img, logo_props),
-          h('div.title', name_props, @corporation.full_name),
-        ])
+        if @corporation.system?
+          logo_props[:attrs][:src] = logo_for_user(@corporation.corporations.last)
+          children << h(:img, logo_props)
+        end
+
+        h('div.corp__title', title_row_props, children)
       end
 
       def render_holdings
         holdings_row_props = {
           style: {
-            grid: '1fr / max-content auto minmax(4rem, max-content)',
-            gap: '0 0.3rem',
-            padding: '0.2rem 0.2rem 0.2rem 0.4rem',
+            grid: '1fr / max-content minmax(max-content, 1fr) minmax(4rem, max-content)',
+            gap: '0 0.5rem',
+            padding: '0.2rem 0.2rem 0.2rem 0.35rem',
             backgroundColor: color_for(:bg2),
             color: color_for(:font2),
           },
         }
         sym_props = {
+          attrs: {
+            title: 'Corporation Symbol',
+          },
           style: {
             fontSize: '1.5rem',
             fontWeight: 'bold',
-            justifySelf: 'start',
           },
         }
         holdings_props = {
           style: {
             grid: '1fr / repeat(auto-fit, auto)',
             gridAutoFlow: 'column',
-            gap: '0 0.4rem',
+            gap: '0 0.5rem',
+            justifyContent: 'space-evenly',
+            justifySelf: 'normal',
           },
         }
 
@@ -187,7 +186,7 @@ module View
           elsif @corporation.cash.positive?
             h(:div, holdings_props, [render_to_float, render_cash])
           else
-            h(:div, holdings_props, @game.float_str(@corporation))
+            h(:div, [render_to_float])
           end
 
         h('div.corp__holdings', holdings_row_props, [
@@ -202,76 +201,63 @@ module View
       end
 
       def render_to_float
-        render_header_segment("#{@corporation.percent_to_float}%", 'to float')
+        props = { style: { textAlign: 'center' } }
+        props[:style][:maxWidth] = '3.5rem' if @corporation.cash.positive? && @corporation.tokens.size > 3
+        h(:div, props, @game.float_str(@corporation))
       end
 
       def render_trains
-        trains = @corporation.trains.map do |train|
-          train.obsolete ? "(#{train.name})" : train.name
+        trains = (@corporation.system? ? @corporation.shells : [@corporation]).map do |c|
+          if c.trains.empty?
+            'None'
+          else
+            c.trains.map { |t| t.obsolete ? "(#{t.name})" : t.name }.join(' ')
+          end
         end
 
-        render_header_segment(trains.empty? ? 'None' : trains.join(' '), 'Trains')
+        render_header_segment(trains, 'Trains')
       end
 
-      def render_header_segment(value, key)
-        segment_props = {
-          style: {
-            grid: '25px auto / 1fr',
-          },
-        }
+      def render_header_segment(values, key)
+        values = [values] unless values.is_a?(Array)
 
         value_props = {
-          style: {
-            maxWidth: '7.5rem',
-            fontWeight: 'bold',
+          style: {},
+          attrs: {
+            title: key,
           },
         }
+        value_props[:style][:fontSize] = '80%' if values.max_by(&:size).size > 10
 
-        value_props[:style].merge!(fontSize: 'small') if value.size > 6
-        value_props[:style].merge!(fontSize: 'x-small') if value.size > 10
-
-        key_props = {
-          style: {
-            alignSelf: 'end',
-          },
-        }
-        h(:div, segment_props, [
-          h('div.right.nowrap', value_props, value),
-          h(:div, key_props, key),
-        ])
+        h('div.bold', values.map { |v| h('div.nowrap', value_props, v) })
       end
 
       def render_tokens
         token_list_props = {
           style: {
             grid: '1fr / auto-flow',
-            justifySelf: 'right',
             gap: '0 0.2rem',
             width: '100%',
             overflow: 'auto',
           },
         }
         token_column_props = {
+          attrs: {},
           style: {
-            grid: '25px auto / 1fr',
-            justifyItems: 'center',
-          },
-        }
-        token_text_props = {
-          style: {
-            alignSelf: 'end',
+            grid: '1fr auto / 1fr',
           },
         }
 
         tokens_body = @corporation.tokens.map.with_index do |token, i|
           token_text =
             if i.zero? && @corporation.coordinates
-              @corporation.coordinates
+              @corporation.coordinates.is_a?(Array) ? @corporation.coordinates.join('/') : @corporation.coordinates
             else
               token.city ? token.city.hex.name : token.price
             end
-          [token.logo, token.used, token_text]
+          [logo_for_user(token), token.used, token_text]
         end
+        tokens_body.sort_by! { |t| t[1] ? 1 : -1 }
 
         @corporation.assignments.each do |assignment, _active|
           img = @game.class::ASSIGNMENT_TOKENS[assignment]
@@ -279,6 +265,7 @@ module View
         end
 
         h(:div, token_list_props, tokens_body.map do |logo, used, text|
+          token_column_props[:attrs][:title] = "token #{used ? 'location: ' : 'cost: '}#{text}"
           img_props = {
             attrs: {
               src: logo,
@@ -288,9 +275,10 @@ module View
             },
           }
           img_props[:style][:filter] = 'contrast(50%) grayscale(100%)' if used
+
           h(:div, token_column_props, [
             h(:img, img_props),
-            h(:div, token_text_props, text),
+            h(:div, text),
           ])
         end)
       end
@@ -316,7 +304,7 @@ module View
             player.num_shares_of(@corporation, ceil: false),
             @game.round.active_step&.did_sell?(@corporation, player),
             !@corporation.holding_ok?(player, 1),
-            player.shares_of(@corporation).any?(&:last_cert),
+            player.shares_of(@corporation).any?(&:double_cert),
           ]
         end
 
@@ -329,8 +317,8 @@ module View
         player_rows = player_info
           .select { |_, _, num_shares, did_sell| !num_shares.zero? || did_sell }
           .sort_by { |_, president, num_shares, _| [president ? 0 : 1, -num_shares] }
-          .map do |player, president, num_shares, did_sell, at_limit, last_cert|
-            flags = (president ? '*' : '') + (last_cert ? 'd' : '') + (at_limit ? 'L' : '')
+          .map do |player, president, num_shares, did_sell, at_limit, double_cert|
+            flags = (president ? '*' : '') + (double_cert ? 'd' : '') + (at_limit ? 'L' : '')
             h('tr.player', [
               h("td.left.name.nowrap.#{president ? 'president' : ''}", player.name),
               h('td.right', shares_props, "#{flags.empty? ? '' : flags + ' '}#{share_number_str(num_shares)}"),
@@ -354,7 +342,7 @@ module View
           .map do |other_corp, president, num_shares, did_sell, at_limit|
             flags = (president ? '*' : '') + (at_limit ? 'L' : '')
             h('tr.corp', [
-              h("td.left.name.nowrap.#{president ? 'president' : ''}", other_corp.name),
+              h("td.left.name.nowrap.#{president ? 'president' : ''}", "© #{other_corp.name}"),
               h('td.right', shares_props, "#{flags.empty? ? '' : flags + ' '}#{share_number_str(num_shares)}"),
               did_sell ? h('td.italic', 'Sold') : '',
             ])
@@ -364,20 +352,24 @@ module View
         if !num_ipo_shares.empty? && @corporation.capitalization != @game.class::CAPITALIZATION
           num_ipo_shares = '* ' + num_ipo_shares
         end
-        last_cert = @corporation.shares_of(@corporation).any?(&:last_cert)
-        pool_rows = [
-          h('tr.ipo', [
+        dc = @corporation.shares_of(@corporation).any?(&:double_cert)
+        dc_reserved = @corporation.reserved_shares.any?(&:double_cert)
+        double_cert = dc && !dc_reserved
+
+        pool_rows = []
+        if !num_ipo_shares.empty? || double_cert || @corporation.capitalization != :full
+          pool_rows << h('tr.ipo', [
             h('td.left', @game.ipo_name(@corporation)),
-            h('td.right', shares_props,
-              (last_cert ? 'd ' : '') + num_ipo_shares),
+            h('td.right', shares_props, (double_cert ? 'd ' : '') + num_ipo_shares),
             h('td.padded_number', share_price_str(@corporation.par_price)),
-          ]),
-        ]
+          ])
+        end
 
         if @corporation.reserved_shares.any?
+          flags = (dc_reserved ? 'd ' : '') + 'R'
           pool_rows << h('tr.reserved', [
             h('td.left', @game.ipo_reserved_name),
-            h('td.right', shares_props, share_number_str(@corporation.num_ipo_reserved_shares)),
+            h('td.right', shares_props, flags + ' ' + share_number_str(@corporation.num_ipo_reserved_shares)),
             h('td.padded_number', share_price_str(@corporation.par_price)),
           ])
         end
@@ -398,9 +390,9 @@ module View
 
         if player_rows.any? || @corporation.num_market_shares.positive?
           at_limit = @game.share_pool.bank_at_limit?(@corporation)
-          last_cert = @game.share_pool.shares_of(@corporation).any?(&:last_cert)
+          double_cert = @game.share_pool.shares_of(@corporation).any?(&:double_cert)
 
-          flags = (@corporation.receivership? ? '*' : '') + (last_cert ? 'd' : '') + (at_limit ? 'L' : '')
+          flags = (@corporation.receivership? ? '*' : '') + (double_cert ? 'd' : '') + (at_limit ? 'L' : '')
 
           pool_rows << h('tr.market', market_tr_props, [
             h('td.left', 'Market'),
@@ -456,7 +448,7 @@ module View
         }
         logo_props = {
           attrs: {
-            src: corporation.logo,
+            src: logo_for_user(corporation),
           },
           style: {
             height: '20px',
@@ -485,28 +477,27 @@ module View
 
       def render_revenue_history
         last_run = @corporation.operating_history[@corporation.operating_history.keys.max].revenue
-        h(:div, { style: { display: 'inline' } }, [
+        h(:div, { style: { display: 'inline', marginLeft: '2rem' } }, [
           'Last Run: ',
           h('span.bold', @game.format_currency(last_run)),
         ])
       end
 
-      def render_status
-        [h(:div, { style: { display: 'inline', fontSize: 'small' } }, [
-          h('span.bold', @game.status_str(@corporation)),
-        ])]
-      end
-
       def render_operating_order
-        return [] unless @game.round.current_entity&.operator?
-
         round = @game.round
-        if (n = @game.round.entities.index(@corporation))
-          m = round.entities.index(round.current_entity)
-          span_class = '.bold' if n && m && n >= m
+        order =
+          if @game.round.operating?
+            @game.round.entities.index(@corporation)
+          else
+            @game.operating_order.index(@corporation)
+          end
+
+        if order
+          m = round.entities.index(round.current_entity) if @game.round.operating?
+          span_class = '.bold' if order && m && order >= m
           [h(:div, { style: { display: 'inline' } }, [
             'Order: ',
-            h("span#{span_class}", n + 1),
+            h("span#{span_class}", order + 1),
           ])]
         else
           []
@@ -575,6 +566,10 @@ module View
 
       def selected?
         @corporation == @selected_corporation
+      end
+
+      def logo_for_user(entity)
+        @user&.dig('settings', 'simple_logos') ? entity.simple_logo : entity.logo
       end
 
       def can_assign_corporation?

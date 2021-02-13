@@ -42,46 +42,31 @@ module View
       title = 'Profile Settings'
       inputs = [
         render_username,
-        render_notifications(setting_for(:notifications)),
-        h('div#settings__colors', [
+        h('div#settings__options', [
+          render_notifications(setting_for(:notifications)),
+          render_simple_logos(setting_for(:simple_logos)),
           render_logo_color(setting_for(:red_logo)),
-          h(:div, [
-            render_color('Main Background', :bg, color_for(:bg)),
-            render_color('Main Font Color', :font, color_for(:font)),
-          ]),
-          h(:div, [
-            render_color('Alternative Background', :bg2, color_for(:bg2)),
-            render_color('Alternative Font Color', :font2, color_for(:font2)),
-          ]),
-          h(:div, [
-            render_color('Your Turn', :your_turn, color_for(:your_turn)),
-            render_color('Hotseat Game', :hotseat_game, color_for(:hotseat_game)),
-          ]),
+        ]),
+        h('div#settings__colors', { style: { maxWidth: '38rem' } }, [
+          render_color('Main Background', :bg, color_for(:bg)),
+          render_color('Main Font Color', :font, color_for(:font)),
+          render_color('Alternative Background', :bg2, color_for(:bg2)),
+          render_color('Alternative Font Color', :font2, color_for(:font2)),
+          render_color('Your Turn', :your_turn, color_for(:your_turn)),
+          render_color('Hotseat Game', :hotseat_game, color_for(:hotseat_game)),
         ]),
         render_tile_colors,
         render_route_colors,
-        h('div#settings__buttons', [
+        h('div#settings__buttons', { style: { marginTop: '1rem' } }, [
           render_button('Save Changes') { submit },
           render_button('Reset to Defaults') { reset_settings },
-        ]),
-        h('div#settings__logout', [
-          render_button('Logout') { logout },
-        ]),
-        h(:div, [
-          render_button('Delete Account and All Data', style: { marginTop: '0' }) { delete },
-          render_input('Type DELETE to confirm', id: :confirm, type: :confirm),
+          render_button('Logout', { style: { display: 'block', margin: '1rem 0' } }) { logout },
+          render_button('Delete Account and All Data', { style: { margin: '0 0.5rem 0 0' } }) { delete },
+          render_input('Type DELETE to confirm', id: :confirm, type: :confirm, input_style: { width: '5rem' }),
         ]),
       ]
 
-      finished_games = @games.select { |game| user_in_game?(@user, game) && game['status'] == 'finished' }
-                         .sort_by { |game| -game['updated_at'] }
-
-      [render_form(title, inputs),
-       h(GameRow,
-         header: 'Your Finished Games',
-         game_row_games: finished_games,
-         type: :personal,
-         user: @user)]
+      [render_form(title, inputs)]
     end
 
     def render_signup
@@ -104,7 +89,7 @@ module View
 
       title = 'Login'
       inputs = [
-        render_input('Email', id: :email, type: :email, attrs: { autocomplete: 'email' }),
+        render_input('Email or Username', id: :email, type: :email, attrs: { autocomplete: 'email' }),
         render_input('Password', id: :password, type: :password, attrs: { autocomplete: 'current-password' }),
         h(:div, { style: { marginBottom: '1rem' } }, [render_button('Login') { submit }]),
         h(:a, { attrs: { href: '/forgot' } }, 'Forgot Password'),
@@ -114,18 +99,9 @@ module View
     end
 
     def reset_settings
-      input_elm(:bg).value = default_for(:bg)
-      input_elm(:font).value = default_for(:font)
-      input_elm(:bg2).value = default_for(:bg2)
-      input_elm(:font2).value = default_for(:font2)
-      input_elm(:your_turn).value = default_for(:your_turn)
-      input_elm(:hotseat_game).value = default_for(:hotseat_game)
-      input_elm(:red_logo).checked = false
-
-      TILE_COLORS.each do |color, hex_color|
-        input_elm(color).value = hex_color
-      end
-
+      %i[simple_logos red_logo].each { |e| input_elm(e).checked = default_for(e) }
+      %i[bg font bg2 font2 your_turn hotseat_game].each { |e| input_elm(e).value = default_for(e) }
+      TILE_COLORS.each { |color, hex_color| input_elm(color).value = hex_color }
       ROUTE_COLORS.each_with_index do |hex_color, index|
         input_elm(route_prop_string(index, :color)).value = hex_color
         input_elm(route_prop_string(index, :dash)).value = '0'
@@ -138,41 +114,49 @@ module View
     def render_username
       h('div#settings__username', [
         render_input(
-          'User Name:',
+          'User Name',
           id: :name,
-          attrs: { value: @user&.dig('name') || '' }
+          attrs: { value: @user&.dig('name') || '' },
+          input_style: { width: '10.5rem' },
         ),
       ])
     end
 
     def render_notifications(checked = true)
-      h('div#settings__notifications', [
-        render_input(
-          'Allow Turn and Message Notifications',
-          id: :notifications,
-          type: :checkbox,
-          attrs: { checked: checked },
-        ),
-      ])
+      render_input(
+        'Turn and Message Emails',
+        id: :notifications,
+        type: :checkbox,
+        attrs: { checked: checked },
+      )
+    end
+
+    def render_simple_logos(checked = true)
+      render_input(
+        'Simple Corporation Logos',
+        id: :simple_logos,
+        type: :checkbox,
+        attrs: { checked: checked },
+      )
+    end
+
+    def render_logo_color(checked = false)
+      render_input(
+        'Red 18xx.games Logo',
+        id: :red_logo,
+        type: :checkbox,
+        attrs: { checked: checked },
+      )
     end
 
     def render_color(label, id, hex_color, attrs: {})
       render_input(label, id: id, type: :color, attrs: { value: hex_color, **attrs })
     end
 
-    def render_logo_color(red_logo)
-      render_input(
-        'Alternative Red Logo',
-        id: :red_logo,
-        type: :checkbox,
-        attrs: { checked: red_logo },
-      )
-    end
-
     def render_tile_colors
       h('div#settings__tiles', [
         h(:h3, 'Map & Tile Colors'),
-        h('div#settings__tiles__buttons', TILE_COLORS.map do |color, _|
+        h(:div, TILE_COLORS.map do |color, _|
           render_color('', color, setting_for(color), attrs: { title: color == 'white' ? 'plain' : color })
         end),
       ])
@@ -238,8 +222,8 @@ module View
         },
       }
 
-      h('div#routes', [
-        h(:h3, 'Trains & Routes'),
+      h('div#settings__routes', [
+        h(:h3, 'Routes, Trains & Players'),
         h(:div, grid_props, [
           h(:div, ''),
           h(:div, header_props, 'Color'),

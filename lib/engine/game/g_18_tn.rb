@@ -56,6 +56,12 @@ module Engine
         @green_nashville_tile ||= @tiles.find { |t| t.name == 'TN2' }
       end
 
+      def status_str(corp)
+        return unless corp.id == 'IC'
+
+        "#{corp.presidents_percent}% President's Share"
+      end
+
       def operating_round(round_num)
         # For OR 1, set company buy price to face value only
         @companies.each do |company|
@@ -68,10 +74,10 @@ module Engine
 
         Round::Operating.new(self, [
           Step::Bankrupt,
-          Step::G18TN::SpecialTrack,
+          Step::SpecialTrack,
           Step::G18TN::BuyCompany,
           Step::HomeToken,
-          Step::G18TN::Track,
+          Step::Track,
           Step::Token,
           Step::Route,
           Step::G18TN::Dividend,

@@ -50,10 +50,10 @@ module View
           render_company_on_card(@company)
         else
           header_style = {
-            background: 'yellow',
+            background: @company.color,
+            color: @company.text_color,
             border: '1px solid',
             borderRadius: '5px',
-            color: 'black',
             marginBottom: '0.5rem',
             fontSize: '90%',
           }
@@ -142,7 +142,7 @@ module View
         hidden_props = {
           style: {
             display: 'none',
-            gridColumnEnd: "span #{@company.owner.player? ? '3' : '2'}",
+            gridColumnEnd: "span #{@company.owner&.player? ? '3' : '2'}",
             marginBottom: '0.5rem',
             padding: '0.1rem 0.2rem',
             fontSize: '80%',
@@ -156,7 +156,7 @@ module View
           extra << " (#{uses[0]}/#{uses[1]})"
         end
         [h('div.nowrap', name_props, company.name + extra.join(',')),
-         @company.owner.player? ? h('div.right', @game.format_currency(company.value)) : '',
+         @company.owner&.player? ? h('div.right', @game.format_currency(company.value)) : '',
          h('div.padded_number', @game.format_currency(company.revenue)),
          @hidden_divs[company.sym]]
       end

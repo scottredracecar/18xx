@@ -8,7 +8,7 @@ module Engine
       class SpecialTrack < SpecialTrack
         COPPER_CANYON = '470'
 
-        def tile_lay_abilities(entity)
+        def abilities(entity, **_kwargs)
           ability = super
 
           ability if ability &&

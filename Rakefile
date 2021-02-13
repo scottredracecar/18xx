@@ -12,29 +12,14 @@ unless ENV['RACK_ENV'] == 'production'
 end
 
 # Migrate
-migrate = lambda do |env, version|
+migrate = lambda do |env, version, truncate = false|
   ENV['RACK_ENV'] = env
   require_relative 'db'
   require 'logger'
   Sequel.extension :migration
   DB.loggers << Logger.new($stdout) if DB.loggers.empty?
+  DB[:actions].truncate if truncate && DB.tables.include?(:actions)
   Sequel::Migrator.apply(DB, 'migrate', version)
-end
-
-desc 'Migrate test database to latest version'
-task :test_up do
-  migrate.call('test', nil)
-end
-
-desc 'Migrate test database all the way down'
-task :test_down do
-  migrate.call('test', 0)
-end
-
-desc 'Migrate test database all the way down and then back up'
-task :test_bounce do
-  migrate.call('test', 0)
-  Sequel::Migrator.apply(DB, 'migrate')
 end
 
 desc 'Migrate development database to latest version'
@@ -44,12 +29,12 @@ end
 
 desc 'Migrate development database to all the way down'
 task :dev_down do
-  migrate.call('development', 0)
+  migrate.call('development', 0, true)
 end
 
 desc 'Migrate development database all the way down and then back up'
 task :dev_bounce do
-  migrate.call('development', 0)
+  migrate.call('development', 0, true)
   Sequel::Migrator.apply(DB, 'migrate')
 end
 
@@ -111,6 +96,10 @@ task :precompile do
   # Copy to the pin directory
   git_rev = `git rev-parse --short HEAD`.strip
   pin_dir = Assets::OUTPUT_BASE + Assets::PIN_DIR
+  File.write(Assets::OUTPUT_BASE + '/assets/version.json', JSON.dump(
+    hash: git_rev,
+    url: "https://github.com/tobymao/18xx/commit/#{git_rev}",
+  ))
   FileUtils.mkdir_p(pin_dir)
   FileUtils.cp("#{bundle}.gz", "#{pin_dir}/#{git_rev}.js.gz")
 end
@@ -121,7 +110,7 @@ task 'stackprof', [:json] do |_task, args|
   require_relative 'lib/engine'
   starttime = Time.new
   StackProf.run(mode: :cpu, out: 'stackprof.dump', raw: true, interval: 10) do
-    100.times do
+    10.times do
       Engine::Game.load(args[:json])
     end
   end

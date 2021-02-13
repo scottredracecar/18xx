@@ -35,7 +35,7 @@ module View
       props = {
         on: { keyup: enter },
       }
-      h2_props = { style: { margin: '0 0 0.5rem 0' } }
+      h2_props = { style: { margin: '1rem 0 0.5rem 0' } }
 
       id = name.gsub(/\s/, '-').downcase
       h(:form, props, [
@@ -47,7 +47,7 @@ module View
     end
 
     # rubocop:disable Layout/LineLength
-    def render_input(label, placeholder: '', id:, el: 'input', type: 'text', attrs: {}, on: {}, container_style: {}, label_style: {}, input_style: {}, children: [])
+    def render_input(label, id:, placeholder: '', el: 'input', type: 'text', attrs: {}, on: {}, container_style: {}, label_style: {}, input_style: {}, children: [])
       # rubocop:enable Layout/LineLength
       label_props = {
         style: {

@@ -8,12 +8,14 @@ module Engine
     class G18ChesapeakeOffTheRails < G18Chesapeake
       load_from_json(Config::Game::G18ChesapeakeOffTheRails::JSON)
 
-      DEV_STAGE = :alpha
+      DEV_STAGE = :beta
 
-      GAME_RULES_URL = 'https://docs.google.com/document/d/1HI9HyOoCamBEbuE_HCzr2b86xtRDI_hBI3Sbc53KxyA/edit'
+      GAME_RULES_URL = 'https://www.dropbox.com/s/ivm4jsopnzabhru/18ChesOTR_Rules.png?dl=0'
       GAME_DESIGNER = 'Scott Petersen'
 
       SELL_BUY_ORDER = :sell_buy_sell
+
+      GAME_END_CHECK = { bankrupt: :immediate, stock_market: :current_round, bank: :full_or }.freeze
 
       def self.title
         '18Chesapeake: Off the Rails'

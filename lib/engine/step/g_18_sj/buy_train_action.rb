@@ -4,7 +4,11 @@ module BuyTrainAction
   def buy_train_action(action, entity = nil)
     super
 
+    do_after_buy_train_action(action, entity)
+
     @game.perform_nationalization if @game.pending_nationalization?
+
+    @game.buy_electric_train if action.train.name == 'E'
 
     return if !(exchange = action.exchange) || exchange.name == '4'
 

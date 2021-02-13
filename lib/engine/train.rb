@@ -52,6 +52,9 @@ module Engine
 
       @variant = @variants[new_variant]
       @variant.each { |k, v| instance_variable_set("@#{k}", v) }
+
+      # Remove the @local vaiable, this to get the local? method evaluate the new variant
+      remove_instance_variable(:@local) if defined?(@local)
     end
 
     def names_to_prices
@@ -76,6 +79,17 @@ module Engine
 
     def buyable
       @buyable && !@obsolete
+    end
+
+    def local?
+      return @local if defined?(@local)
+
+      @local = if @distance.is_a?(Numeric)
+                 @distance == 1
+               else
+                 distance_city = @distance.find { |n| n['nodes'].include?('city') }
+                 distance_city['visit'] == 1 if distance_city
+               end
     end
 
     def inspect

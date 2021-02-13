@@ -57,7 +57,7 @@ module Engine
     "H23": "Hermannstadt",
     "H27": "Bukarest",
     "I8": "Triest",
-    "J11": "Sarajevo"
+    "J13": "Sarajevo"
   },
   "tiles": {
     "1": 1,
@@ -264,8 +264,64 @@ module Engine
   ],
   "companies": [
     {
+      "sym":"EPP",
+      "name":"C1 Eisenbahn Pilsen - Priesen",
+      "value":200,
+      "interval": [120, 140, 160, 180, 200],
+      "revenue":0,
+      "desc":"Buyer take control of minor Coal Railway EPP (C1), which can be exchanged for the Director's certificate of Regional Railway BK during SRs in phase 3 or 4, or automatically when phase 5 starts. BK floats after exchange as soon as 50% or more are owned by players. This private cannot be sold.",
+      "abilities": [
+        {
+          "type": "no_buy",
+          "owner_type": "player"
+        }
+      ]
+    },
+    {
+      "sym":"EOD",
+      "name":"C2 Eisenbahn Oderberg - Dombran",
+      "value":200,
+      "interval": [120, 140, 160, 180, 200],
+      "revenue":0,
+      "desc":"Buyer take control of minor Coal Railway EOD (C2), which can be exchanged for the Director's certificate of Regional Railway MS during SRs in phase 3 or 4, or automatically when phase 5 starts. MS floats after exchange as soon as 50% or more are owned by players. This private cannot be sold.",
+      "abilities": [
+        {
+          "type": "no_buy",
+          "owner_type": "player"
+        }
+      ]
+    },
+    {
+      "sym":"MLB",
+      "name":"C3 Mosty - Lemberg Bahn",
+      "value":200,
+      "interval": [120, 140, 160, 180, 200],
+      "revenue":0,
+      "desc":"Buyer take control of minor Coal Railway MLB (C3), which can be exchanged for the Director's certificate of Regional Railway CL during SRs in phase 3 or 4, or automatically when phase 5 starts. CL floats after exchange as soon as 50% or more are owned by players. This private cannot be sold.",
+      "abilities": [
+        {
+          "type": "no_buy",
+          "owner_type": "player"
+        }
+      ]
+    },
+    {
+      "sym":"SPB",
+      "name":"C4 Simeria-Petrosani Bahn",
+      "value":200,
+      "interval": [120, 140, 160, 180, 200],
+      "revenue":0,
+      "desc":"Buyer take control of minor Coal Railway SPB (C4), which can be exchanged for the Director's certificate of Regional Railway SB during SRs in phase 3 or 4, or automatically when phase 5 starts. SB floats after exchange as soon as 50% or more are owned by players. This private cannot be sold.",
+      "abilities": [
+        {
+          "type": "no_buy",
+          "owner_type": "player"
+        }
+      ]
+    },
+    {
       "sym":"S1",
-      "name":"Wien-Gloggnitzer Eisenbahngesellschaft (S1)",
+      "name":"S1 Wien-Gloggnitzer Eisenbahngesellschaft",
       "value":240,
       "revenue":0,
       "desc":"Buyer take control of pre-staatsbahn S1, which will be exchanged for the Director's certificate of SD when the first 4 train is sold. Pre-Staatsbahnen starts in Wien (E12). Cannot be sold.",
@@ -278,7 +334,7 @@ module Engine
     },
     {
       "sym":"S2",
-      "name":"Kärntner Bahn (S2)",
+      "name":"S2 Kärntner Bahn",
       "value":120,
       "revenue":0,
       "desc":"Buyer take control of pre-staatsbahn S2, which will be exchanged for a 10% share of SD when the first 4 train is sold. Pre-Staatsbahnen starts in Graz (G10). Cannot be sold.",
@@ -291,7 +347,7 @@ module Engine
     },
     {
       "sym":"S3",
-      "name":"Nordtiroler Staatsbahn (S3)",
+      "name":"S3 Nordtiroler Staatsbahn",
       "value":120,
       "revenue":0,
       "desc":"Buyer take control of pre-staatsbahn S3, which will be exchanged for a 10% share of SD when the first 4 train is sold. Pre-Staatsbahnen starts in Innsbruck (G4). Cannot be sold.",
@@ -304,7 +360,7 @@ module Engine
     },
     {
       "sym":"U1",
-      "name":"Eisenbahn Pest - Waitzen (U1)",
+      "name":"U1 Eisenbahn Pest - Waitzen",
       "value":240,
       "revenue":0,
       "desc":"Buyer take control of pre-staatsbahn U1, which will be exchanged for the Director's certificate of UG when the first 5 train is sold. Pre-Staatsbahnen starts in Pest (F17) in base 1824 and in Budapest (G12) for 3 players on the Cislethania map. Cannot be sold.",
@@ -317,7 +373,7 @@ module Engine
     },
     {
       "sym":"U2",
-      "name":"Mohacs-Fünfkirchner Bahn (U2)",
+      "name":"U2 Mohacs-Fünfkirchner Bahn",
       "value":120,
       "revenue":0,
       "desc":"Buyer take control of pre-staatsbahn U2, which will be exchanged for a 10% share of UG when the first 5 train is sold. Pre-Staatsbahnen starts in Fünfkirchen (H15). Cannot be sold.",
@@ -330,7 +386,7 @@ module Engine
     },
     {
       "sym":"K1",
-      "name":"Kaiserin Elisabeth-Bahn (K1)",
+      "name":"K1 Kaiserin Elisabeth-Bahn",
       "value":240,
       "revenue":0,
       "desc":"Buyer take control of pre-staatsbahn K1, which will be exchanged for the Director's certificate of KK when the first 6 train is sold. Pre-Staatsbahnen starts in Wien (E12). Cannot be sold.",
@@ -343,7 +399,7 @@ module Engine
     },
     {
       "sym":"K2",
-      "name":"Kaiser Franz Joseph-Bahn (K2)",
+      "name":"K2 Kaiser Franz Joseph-Bahn",
       "value":120,
       "revenue":0,
       "desc":"Buyer take control of pre-staatsbahn K2, which will be exchanged for a 10% share of KK when the first 6 train is sold. Pre-Staatsbahnen starts in Wien (E12). Cannot be sold.",
@@ -357,78 +413,134 @@ module Engine
   ],
   "minors":[
     {
+      "sym": "EPP",
+      "name": "C1 Eisenbahn Pilsen - Priesen",
+      "type": "Coal",
+      "tokens": [
+        0
+      ],
+      "logo": "1824/C1",
+      "coordinates": "C6",
+      "city": 0,
+      "color": "gray50"
+    },
+    {
+      "sym": "EOD",
+      "name": "C2 Eisenbahn Oderberg - Dombran",
+      "type": "Coal",
+      "tokens": [
+        0
+      ],
+      "logo": "1824/C2",
+      "coordinates": "A12",
+      "city": 0,
+      "color": "gray50"
+    },
+    {
+      "float_percent": 100,
+      "sym": "MLB",
+      "name": "C3 Mosty - Lemberg Bahn",
+      "type": "Coal",
+      "tokens": [
+        0
+      ],
+      "logo": "1824/C3",
+      "coordinates": "A22",
+      "city": 0,
+      "color": "gray50"
+    },
+    {
+      "sym": "SPB",
+      "name": "C4 Simeria-Petrosani Bahn",
+      "type": "Coal",
+      "tokens": [
+        0
+      ],
+      "logo": "1824/C4",
+      "coordinates": "H25",
+      "city": 0,
+      "color": "gray50"
+    },
+    {
        "sym": "S1",
-       "name": "Wien-Gloggnitzer Eisenbahngesellschaft",
-       "logo": "1824/S1",
+       "name": "S1 Wien-Gloggnitzer Eisenbahngesellschaft",
+       "type": "PreStaatsbahn",
        "tokens": [
-          0
+         0
        ],
+       "logo": "1824/S1",
        "coordinates": "E12",
        "city": 0,
        "color": "orange"
     },
     {
       "sym": "S2",
-      "name": "Kärntner Bahn",
-      "logo": "1824/S2",
+      "name": "S2 Kärntner Bahn",
+      "type": "PreStaatsbahn",
       "tokens": [
-         0
+        0
       ],
+      "logo": "1824/S2",
       "coordinates": "G10",
       "city": 0,
       "color": "orange"
     },
     {
       "sym": "S3",
-      "name": "Nordtiroler Staatsbahn",
-      "logo": "1824/S3",
+      "name": "S3 Nordtiroler Staatsbahn",
+      "type": "PreStaatsbahn",
       "tokens": [
         0
       ],
+      "logo": "1824/S3",
       "coordinates": "G4",
       "city": 0,
       "color": "orange"
     },
     {
       "sym": "U1",
-      "name": "Eisenbahn Pest - Waitzen",
-      "logo": "1824/U1",
+      "name": "U1 Eisenbahn Pest - Waitzen",
+      "type": "PreStaatsbahn",
       "tokens": [
         0
       ],
+      "logo": "1824/U1",
       "coordinates": "F17",
       "city": 1,
       "color": "purple"
     },
     {
       "sym": "U2",
-      "name": "Mohacs-Fünfkirchner Bahn",
-      "logo": "1824/U2",
+      "name": "U2 Mohacs-Fünfkirchner Bahn",
+      "type": "PreStaatsbahn",
       "tokens": [
         0
       ],
+      "logo": "1824/U2",
       "coordinates": "H15",
       "city": 0,
       "color": "purple"
     },
     {
       "sym": "K1",
-      "name": "Kaiserin Elisabeth-Bahn",
-      "logo": "1824/K1",
+      "name": "K1 Kaiserin Elisabeth-Bahn",
+      "type": "PreStaatsbahn",
       "tokens": [
           0
       ],
       "coordinates": "E12",
       "city": 1,
-      "color": "brown"
+      "color": "brown",
+      "logo": "1824/K1"
     },
     {
       "sym": "K2",
-      "name": "Kaiser Franz Joseph-Bahn",
-      "logo": "1824/K2",
+      "name": "K2 Kaiser Franz Joseph-Bahn",
+      "type": "PreStaatsbahn",
       "tokens": [
         0
       ],
+      "logo": "1824/K2",
       "coordinates": "E12",
       "city": 2,
       "color": "brown"
@@ -436,279 +548,146 @@ module Engine
   ],
   "corporations": [
     {
-      "float_percent": 100,
-      "sym": "EPP",
-      "name": "Eisenbahn Pilsen - Priesen",
-      "logo": "1824/C1",
-      "capitalization": "incremental",
-      "shares": [100],
-      "max_ownership_percent": 100,
-      "tokens": [
-        0
-      ],
-      "always_market_price": true,
-      "coordinates": "C6",
-      "color": "gray50",
-      "abilities": [
-        {
-          "type": "base",
-          "owner_type": "player",
-          "description": "Coal company - may only own g trains"
-        },
-        {
-          "type": "exchange",
-          "owner_type": "corporation",
-          "corporation": "",
-          "from": "IPO",
-          "description": "Phase 3-5: Exchange for BK presidency"
-        },
-        {
-            "type": "train_limit",
-            "description": "Train limit 2",
-            "constant": 2
-        }
-      ]
-    },
-    {
-      "float_percent": 100,
-      "sym": "EOD",
-      "name": "Eisenbahn Oderberg - Dombran",
-      "logo": "1824/C2",
-      "capitalization": "incremental",
-      "shares": [100],
-      "max_ownership_percent": 100,
-      "tokens": [
-        0
-      ],
-      "always_market_price": true,
-      "coordinates": "A12",
-      "color": "gray50",
-      "abilities": [
-        {
-          "type": "base",
-          "owner_type": "player",
-          "description": "Coal company - may only own g trains"
-        },
-        {
-          "type": "exchange",
-          "owner_type": "corporation",
-          "corporation": "",
-          "from": "IPO",
-          "description": "Phase 3-5: Exchange for MS presidency"
-        },
-        {
-            "type": "train_limit",
-            "description": "Train limit 2",
-            "constant": 2
-        }
-      ]
-    },
-    {
-      "float_percent": 100,
-      "sym": "MLB",
-      "name": "Mosty - Lemberg Bahn",
-      "logo": "1824/C3",
-      "capitalization": "incremental",
-      "shares": [100],
-      "max_ownership_percent": 100,
-      "tokens": [
-        0
-      ],
-      "always_market_price": true,
-      "coordinates": "A22",
-      "color": "gray50",
-      "abilities": [
-        {
-          "type": "base",
-          "owner_type": "player",
-          "description": "Coal company - may only own g trains"
-        },
-        {
-          "type": "exchange",
-          "owner_type": "corporation",
-          "corporation": "",
-          "from": "IPO",
-          "description": "Phase 3-5: Exchange for CL presidency"
-        },
-        {
-            "type": "train_limit",
-            "description": "Train limit 2",
-            "constant": 2
-        }
-      ]
-    },
-    {
-      "float_percent": 100,
-      "sym": "SPB",
-      "name": "Simeria-Petrosani Bahn",
-      "logo": "1824/C4",
-      "capitalization": "incremental",
-      "shares": [100],
-      "max_ownership_percent": 100,
-      "tokens": [
-        0
-      ],
-      "always_market_price": true,
-      "coordinates": "H25",
-      "color": "gray50",
-      "abilities": [
-        {
-          "type": "base",
-          "owner_type": "player",
-          "description": "Coal company - may only own g trains"
-        },
-        {
-          "type": "exchange",
-          "owner_type": "corporation",
-          "corporation": "",
-          "from": "IPO",
-          "description": "Phase 3-5: Exchange for SB presidency"
-        },
-        {
-            "type": "train_limit",
-            "description": "Train limit 2",
-            "constant": 2
-        }
-      ]
-    },
-    {
       "float_percent": 50,
       "name": "Böhmische Kommerzbahn",
       "sym": "BK",
-      "logo": "1824/BK",
+      "type": "Regional",
       "tokens": [
-         0,
-         40,
-         60,
-         80
+        0,
+        40,
+        60,
+        80
       ],
+      "logo": "1824/BK",
+      "simple_logo": "1824/BK.alt",
       "color": "blue",
       "coordinates": "B9"
     },
     {
-      "float_percent": 50,
       "name": "Mährisch-Schlesische Eisenbahn",
       "sym": "MS",
-      "logo": "1824/MS",
+      "type": "Regional",
+      "float_percent": 50,
       "tokens": [
-         0,
-         40,
-         60,
-         80
+        0,
+        40,
+        60,
+        80
       ],
+      "logo": "1824/MS",
+      "simple_logo": "1824/MS.alt",
       "color": "yellow",
       "text_color": "black",
       "coordinates": "C12"
     },
     {
-      "float_percent": 50,
       "name": "Carl Ludwigs-Bahn",
       "sym": "CL",
-      "logo": "1824/CL",
+      "type": "Regional",
+      "float_percent": 50,
       "tokens": [
-         0,
-         40,
-         60,
-         80
+        0,
+        40,
+        60,
+        80
       ],
       "color": "gray70",
+      "logo": "1824/CL",
+      "simple_logo": "1824/CL.alt",
       "coordinates": "B23"
     },
     {
-      "float_percent": 50,
       "name": "Siebenbürgische Bahn",
       "sym": "SB",
-      "logo": "1824/SB",
+      "type": "Regional",
+      "float_percent": 50,
       "tokens": [
-         0,
-         40,
-         60,
-         80
+        0,
+        40,
+        60,
+        80
       ],
+      "logo": "1824/SB",
+      "simple_logo": "1824/SB.alt",
       "color": "green",
       "text_color": "black",
       "coordinates": "G26"
     },
     {
-      "float_percent": 50,
       "name": "Bosnisch-Herzegowinische Landesbahn",
       "sym": "BH",
-      "logo": "1824/BH",
+      "type": "Regional",
+      "float_percent": 50,
       "tokens": [
-         0,
-         40,
-         100
+        0,
+        40,
+        100
       ],
+      "logo": "1824/BH",
+      "simple_logo": "1824/BH.alt",
       "color": "red",
       "coordinates": "J13"
     },
     {
-      "float_percent": 50,
-      "name": "Ungarische Staatsbahn",
-      "sym": "UG",
-      "color": "purple",
-      "logo": "1824/UG",
-      "tokens": [
-          100,
-          100,
-          100
-      ],
-      "abilities": [
-        {
-            "type": "no_buy",
-            "description": "Unavailable in SR before phase 5"
-        },
-        {
-           "type": "train_limit",
-           "description": "+1 train limit",
-           "increase": 1
-        }
-      ]
-    },
-    {
-      "name": "k&k Staatsbahn",
-      "sym": "KK",
-      "color": "brown",
-      "logo": "1824/KK",
-      "tokens": [
-          40,
-          100,
-          100,
-          100
-      ],
-      "abilities": [
-        {
-            "type": "no_buy",
-            "description": "Unavailable in SR before phase 6"
-        },
-        {
-           "type": "train_limit",
-           "description": "+1 train limit",
-           "increase": 1
-        }
-      ]
-    },
-    {
       "name": "Südbahn",
       "sym": "SD",
-      "color": "orange",
-      "text_color": "black",
-      "logo": "1824/SD",
+      "type": "Staatsbahn",
+      "float_percent": 10,
       "tokens": [
-          100,
-          100
+        100,
+        100
       ],
       "abilities": [
         {
             "type": "no_buy",
             "description": "Unavailable in SR before phase 4"
-        },
-        {
-           "type": "train_limit",
-           "description": "+1 train limit",
-           "increase": 1
         }
-      ]
+      ],
+      "logo": "1824/SD",
+      "simple_logo": "1824/SD.alt",
+      "color": "orange",
+      "text_color": "black"
+    },
+    {
+      "name": "Ungarische Staatsbahn",
+      "sym": "UG",
+      "type": "Staatsbahn",
+      "float_percent": 10,
+      "tokens": [
+        100,
+        100,
+        100
+      ],
+      "abilities": [
+        {
+            "type": "no_buy",
+            "description": "Unavailable in SR before phase 5"
+        }
+      ],
+      "logo": "1824/UG",
+      "simple_logo": "1824/UG.alt",
+      "color": "purple"
+    },
+    {
+      "name": "k&k Staatsbahn",
+      "sym": "KK",
+      "type": "Staatsbahn",
+      "float_percent": 10,
+      "tokens": [
+        40,
+        100,
+        100,
+        100
+      ],
+      "abilities": [
+        {
+            "type": "no_buy",
+            "description": "Unavailable in SR before phase 6"
+        }
+      ],
+      "logo": "1824/KK",
+      "simple_logo": "1824/KK.alt",
+      "color": "brown"
     }
   ],
   "trains": [
@@ -727,8 +706,8 @@ module Engine
               "city",
               "offboard"
            ],
-           "pay":1,
-           "visit":1
+           "pay":2,
+           "visit":2
         },
         {
            "nodes":[
@@ -748,41 +727,13 @@ module Engine
       "distance": 3,
       "num": 7,
       "price": 180,
-      "rusts_on": "6"
+      "rusts_on": "6",
+      "discount": {
+        "2": 40
+      }
     },
     {
       "name": "2g",
-      "distance":[
-        {
-           "nodes":[
-              "city",
-              "offboard"
-           ],
-           "pay":2,
-           "visit":2
-        },
-        {
-           "nodes":[
-              "town"
-           ],
-           "pay":99,
-           "visit":99
-        }
-      ],
-      "num": 5,
-      "price": 240,
-      "available_on": "3",
-      "rusts_on": "4g"
-    },
-    {
-      "name": "4",
-      "distance": 4,
-      "num": 4,
-      "price": 300,
-      "rusts_on": "8"
-    },
-    {
-      "name": "3g",
       "distance":[
         {
            "nodes":[
@@ -800,37 +751,30 @@ module Engine
            "visit":99
         }
       ],
+      "num": 5,
+      "price": 240,
+      "available_on": "3",
+      "rusts_on": "4g",
+      "discount": {
+        "1g": 60
+      }
+    },
+    {
+      "name": "4",
+      "distance": 4,
       "num": 4,
-      "price": 360,
-      "available_on": "4",
-      "rusts_on": "5g",
+      "price": 300,
+      "rusts_on": "8",
       "events": [
         {"type": "close_mountain_railways"},
         {"type": "sd_formation"}
-      ]
+      ],
+      "discount": {
+        "3": 90
+      }
     },
     {
-      "name": "5",
-      "distance": 5,
-      "num": 3,
-      "price": 450,
-      "rusts_on": "10",
-      "events": [
-        {"type": "close_coal_railways"},
-        {"type": "ug_formation"}
-      ]
-    },
-    {
-      "name": "6",
-      "distance": 6,
-      "num": 3,
-      "price": 630,
-      "events": [
-        {"type": "kk_formation"}
-      ]
-    },
-    {
-      "name": "4g",
+      "name": "3g",
       "distance":[
         {
            "nodes":[
@@ -848,18 +792,42 @@ module Engine
            "visit":99
         }
       ],
-      "num": 3,
-      "price": 600,
-      "available_on": "6"
+      "num": 4,
+      "price": 360,
+      "available_on": "4",
+      "rusts_on": "5g",
+      "discount": {
+        "2g": 120
+      }
     },
     {
-      "name": "8",
-      "distance": 8,
+      "name": "5",
+      "distance": 5,
       "num": 3,
-      "price": 800
+      "price": 450,
+      "rusts_on": "10",
+      "events": [
+        {"type": "close_coal_railways"},
+        {"type": "ug_formation"}
+      ],
+      "discount": {
+        "4": 140
+      }
     },
     {
-      "name": "5g",
+      "name": "6",
+      "distance": 6,
+      "num": 3,
+      "price": 630,
+      "events": [
+        {"type": "kk_formation"}
+      ],
+      "discount": {
+        "5": 200
+      }
+    },
+    {
+      "name": "4g",
       "distance":[
         {
            "nodes":[
@@ -877,15 +845,56 @@ module Engine
            "visit":99
         }
       ],
+      "num": 3,
+      "price": 600,
+      "available_on": "6",
+      "discount": {
+        "3g": 180
+      }
+    },
+    {
+      "name": "8",
+      "distance": 8,
+      "num": 3,
+      "price": 800,
+      "discount": {
+        "6": 300
+      }
+    },
+    {
+      "name": "5g",
+      "distance":[
+        {
+           "nodes":[
+              "city",
+              "offboard"
+           ],
+           "pay":6,
+           "visit":6
+        },
+        {
+           "nodes":[
+              "town"
+           ],
+           "pay":99,
+           "visit":99
+        }
+      ],
       "num": 2,
       "price": 800,
-      "available_on": "8"
+      "available_on": "8",
+      "discount": {
+        "4g": 300
+      }
     },
     {
       "name": "10",
       "distance": 10,
       "num": 20,
-      "price": 950
+      "price": 950,
+      "discount": {
+        "8": 400
+      }
     }
   ],
   "hexes": {
@@ -893,9 +902,11 @@ module Engine
   "phases": [
     {
       "name": "2",
+      "on": "2",
       "train_limit": {
-        "corporation":4,
-        "minor":2
+        "PreStaatsbahn":2,
+        "Coal":2,
+        "Regional":4
       },
       "tiles": [
         "yellow"
@@ -904,16 +915,18 @@ module Engine
     },
     {
       "name": "3",
+      "on": "3",
       "train_limit": {
-        "corporation":4,
-        "minor":2
+        "PreStaatsbahn":2,
+        "Coal":2,
+        "Regional":4
       },
       "tiles": [
         "yellow",
         "green"
       ],
       "status": [
-        "can_buy_companies",
+        "can_buy_trains",
         "may_exchange_coal_railways",
         "may_exchange_mountain_railways"
       ],
@@ -921,59 +934,90 @@ module Engine
     },
     {
       "name": "4",
+      "on": "4",
       "train_limit": {
-        "corporation":3,
-        "minor":2
+        "PreStaatsbahn":2,
+        "Coal":2,
+        "Regional":3
       },
       "tiles": [
         "yellow",
         "green"
       ],
       "status": [
-        "can_buy_companies",
+        "can_buy_trains",
         "may_exchange_coal_railways"
       ],
       "operating_rounds": 2
     },
     {
       "name": "5",
-      "train_limit": "2",
+      "on": "5",
+      "train_limit": {
+        "PreStaatsbahn":2,
+        "Regional":3,
+        "Staatsbahn":4
+      },
       "tiles": [
         "yellow",
         "green",
         "brown"
+      ],
+      "status": [
+        "can_buy_trains"
       ],
       "operating_rounds": 3
     },
     {
       "name": "6",
-      "train_limit": "2",
+      "on": "6",
+      "train_limit": {
+        "Regional":2,
+        "Staatsbahn":3
+      },
       "tiles": [
         "yellow",
         "green",
         "brown"
       ],
+      "status": [
+        "can_buy_trains"
+      ],
       "operating_rounds": 3
     },
     {
       "name": "8",
-      "train_limit": "2",
+      "on": "8",
+      "train_limit": {
+        "Regional":2,
+        "Staatsbahn":3
+      },
       "tiles": [
         "yellow",
         "green",
         "brown",
         "gray"
       ],
+      "status": [
+        "can_buy_trains"
+      ],
       "operating_rounds": 3
     },
     {
       "name": "10",
-      "train_limit": "2",
+      "on": "10",
+      "train_limit": {
+        "Regional":2,
+        "Staatsbahn":3
+      },
       "tiles": [
         "yellow",
         "green",
         "brown",
         "gray"
+      ],
+      "status": [
+        "can_buy_trains"
       ],
       "operating_rounds": 3
     }

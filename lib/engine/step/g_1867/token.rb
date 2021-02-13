@@ -7,11 +7,22 @@ module Engine
   module Step
     module G1867
       class Token < Token
+        def auto_actions(entity)
+          [Engine::Action::Pass.new(entity)] unless can_really_place_token?(entity)
+        end
+
+        def can_really_place_token?(entity)
+          # Cheaper to do the graph first, then check affordability
+          current_entity == entity &&
+            !(tokens = available_tokens(entity)).empty? &&
+            @game.graph.can_token?(entity) &&
+            can_afford_token?(tokens, buying_power(entity))
+        end
+
         def log_skip(entity)
           super if entity.type == :major
         end
 
-        # @note, this is presently unused as the CPU overhead is too high
         def can_afford_token?(tokens, cash)
           token = tokens.first
           # Distance must be at least 1, so check minimum price.
@@ -21,7 +32,7 @@ module Engine
           used_tokens = corporation.tokens.select(&:used).map { |token2| token2.city.tile.hex }
 
           @game.graph.tokenable_cities(corporation).any? do |city|
-            hex_distance_from_token(used_tokens, city.tile.hex) * token.price < cash
+            hex_distance_from_token(used_tokens, city.tile.hex) * token.price <= cash
           end
         end
 
@@ -29,7 +40,7 @@ module Engine
           used_tokens.map { |token| token.distance(hex) }.min
         end
 
-        def adjust_token_price_ability!(entity, token, hex, _city, _special_ability = nil)
+        def adjust_token_price_ability!(entity, token, hex, _city, special_ability: nil) # rubocop:disable Lint/UnusedMethodArgument
           # 1867 has no special abilities to do with tokens.
           used_tokens = entity.tokens.select(&:used).map { |token2| token2.city.tile.hex }
           token.price = token.price * hex_distance_from_token(used_tokens, hex)

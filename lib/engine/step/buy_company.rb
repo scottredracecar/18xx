@@ -14,12 +14,9 @@ module Engine
         return [] if entity.minor?
         return blocks? ? ACTIONS : ACTIONS_NO_PASS if can_buy_company?(entity)
 
-        return PASS if blocks? &&
-                       entity.corporation? &&
-                       @game.abilities(entity,
-                                       time: 'owning_corp_or_turn',
-                                       owner_type: 'corporation',
-                                       strict_time: true)
+        if blocks? && entity.corporation? && @game.abilities(entity, time: 'owning_corp_or_turn', passive_ok: false)
+          return PASS
+        end
 
         []
       end
@@ -62,7 +59,7 @@ module Engine
         company.owner = entity
         owner&.companies&.delete(company)
 
-        @game.abilities(company, :assign_corporation) do |ability|
+        @game.abilities(company, :assign_corporation, time: 'sold') do |ability|
           Assignable.remove_from_all!(assignable_corporations, company.id) do |unassigned|
             log_later << "#{company.name} is unassigned from #{unassigned.name}" if unassigned.name != entity.name
           end
@@ -78,7 +75,7 @@ module Engine
             end
         end
 
-        @game.abilities(company, :revenue_change, time: :sold) { |ability| company.revenue = ability.revenue }
+        @game.abilities(company, :revenue_change, time: 'sold') { |ability| company.revenue = ability.revenue }
 
         company.remove_ability_when(:sold)
 
@@ -86,13 +83,8 @@ module Engine
         @round.company_sellers[company] = owner
 
         entity.companies << company
-        entity.spend(price, owner.nil? ? @game.bank : owner)
+        pay(entity, owner, price, company)
 
-        @game.company_bought(company, entity)
-
-        @log << "#{entity.name} buys #{company.name} from "\
-                "#{owner.nil? ? 'the market' : owner.name} for "\
-                "#{@game.format_currency(price)}"
         log_later.each { |l| @log << l }
       end
 
@@ -106,6 +98,16 @@ module Engine
 
       def setup
         @blocks = @opts[:blocks] || false
+      end
+
+      def pay(entity, owner, price, company)
+        entity.spend(price, owner || @game.bank)
+
+        @game.company_bought(company, entity)
+
+        @log << "#{entity.name} buys #{company.name} from "\
+                "#{owner.nil? ? 'the market' : owner.name} for "\
+                "#{@game.format_currency(price)}"
       end
     end
   end

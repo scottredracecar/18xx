@@ -17,11 +17,30 @@ These attributes may be set for all ability types
   order for the ability to be active. Either "player" or
   "corporation".
 - `remove`: Game phase when this ability is removed
-- `when`: The game step or phase when this ability is active
 - `count`: The number of times the ability may be used
 - `count_per_or`: The number of times the ability may be used in each OR; the
   property `count_this_or` is reset to 0 at the start of each OR and increments
   each time the ability is used
+- `on_phase`: The phase when this ability is active
+- `when`: (string or array of strings) The game steps or special time descriptor
+  when this ability is active. If no values are provided, this ability is
+  considered to be "passive", i.e., its effect applies without the user needinng
+  to click on the abilities button to activate it. For an ability to be included
+  in an `abilities()` call, either a `time` kwarg or the name of the current
+  game phase class must match (one of) the ability's `when` string(s). Examples:
+    - `any`: usable at any time during the game
+    - `buying_train`: train buying step
+    - `Track`, `TrackAndToken`: track-laying step; if normal track lays are used
+      up, but there is still a `Track` ability, then the active step will not
+      pass on to the next step automatically
+    - `special_track`: make the ability available to the SpecialTrack step
+    - `sold`: when the company is bought from a player by a corporation
+    - `bought_train`: when the owning corporation has bought a train; generally
+      used with `close` abilities
+    - `other_or`: usable during the OR turn of another corporation
+    - `owning_corp_or_turn`: usable at any point during the owning corporation's OR turn
+    - `never`: use with `close` abilities to prevent a company from closing
+    - `has_train`: when the owning corporation owns at least one train
 
 ## additional_token
 
@@ -86,9 +105,11 @@ Provide a description for an ability that is implemented outside of the ability 
 
 ## exchange
 
-Exchange this company for a share of a corporation.
+This company may be exchanged for a single share of a specified corporation during a step
+that allows exchange.
 
-- `corporation`: The corporation whose share may be exchanged. Use `"any"` to allow for all corporations.
+- `corporations`: An array with corporation names, whose share may be exchanged.
+  Use a simple `"any"` (no array) to allow for any corporation.
 - `from`: Where the share may be take from, either `"ipo"`,
   `"market"`, or an array containing both.
 
@@ -148,7 +169,7 @@ Lay a tile and place a station token without connectivity
 - `tiles`: An array of tile numbers which may be placed at the
   teleport destination.
 - `cost`: Cost to use the teleport ability.
-- `fee_tile_lay`: If true, the tile is laid with 0 cost. Default false.
+- `free_tile_lay`: If true, the tile is laid with 0 cost. Default false.
 
 ## tile_discount
 
@@ -175,6 +196,8 @@ normal tile lay actions.
 - `hexes`: Array of hex coordinates where tiles may be laid.
 - `tiles`: Array of tile numbers which may be laid.
 - `cost`: Cost to use the ability.
+- `closed_when_used_up`: This ability has a count that is decreased each time it is used. If this attribute is true the private is closed when count reaches zero, if false the private
+remains open but the discount can no longer be used. Default false.
 - `free`: If true, the tiles are laid with 0 cost. Default false.
 - `discount`: Discount the cost of laying the tile by the given
   amount. Default 0.
@@ -212,10 +235,10 @@ remains open but the discount can no longer be used. Default true.
 ## train_limit
 
 Modify train limit in some way.
+For performance reasons, the supporting code needs to be added directly to the game class. See G18MEX#train_limit for an example.
 
 - `increase`: If positive, this will increase the train limit with this
   amount in all faces. Default 0.
-- `constant`: If positive, this is the train limit used. Default 0.
 
 ## token
 
@@ -233,8 +256,19 @@ Modified station token placement
   effectively increasing the city's size by one. (See 18 Los Angeles's optional
   company "Dewey, Cheatham, and Howe" or the corporations which get removed in
   1846 2p Variant for examples). Default nil.
-- `special_only`: If true, this ability may only be used by explicitly
+- `extra_slot`: Simlar to `cheater` except this token does not take a slot -
+  When `cheater` is used, when the city gets an extra city slot the 'cheater' token
+  goes into the newly opened slot. If `extra_slot` is used, when the city gets an extra
+  token slot, the new token slot is open - the extra token does not consume it. This
+  also means that an `extra_slot` token lay in an city with an open slot does not use
+  up the open slot.
+- `special_only`: If true, this ability may only be used by explicitly.
   activating the company to which it belongs (i.e., using the `SpecialTrack`
   step); if unset or false, `Engine::Step::Tokener#adjust_token_price_ability!`
   infers that the special ability ought to be used whenever a token is being
   placed in a location that the ability is allowed to use. Default false.
+
+
+## sell_company
+
+This company can be sold to bank for face value. This closes the company.

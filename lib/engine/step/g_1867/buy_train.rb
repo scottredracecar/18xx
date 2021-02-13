@@ -23,8 +23,8 @@ module Engine
         end
 
         def pass!
-          @game.nationalize!(current_entity) if current_entity.trains.none?
           super
+          @game.nationalize!(current_entity) if current_entity.trains.empty?
         end
 
         def discountable_trains_allowed?(_entity)
@@ -61,6 +61,10 @@ module Engine
           else
             @game.buying_power(entity)
           end
+        end
+
+        def needed_cash(_entity)
+          @depot.min_depot_price
         end
 
         def try_take_loan(entity, cost)

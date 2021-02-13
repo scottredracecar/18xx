@@ -75,10 +75,10 @@ module Engine
     class Base
       attr_reader :raw_actions, :actions, :bank, :cert_limit, :cities, :companies, :corporations,
                   :depot, :finished, :graph, :hexes, :id, :loading, :loans, :log, :minors,
-                  :phase, :players, :operating_rounds, :round, :share_pool, :stock_market,
+                  :phase, :players, :operating_rounds, :round, :share_pool, :stock_market, :tile_groups,
                   :tiles, :turn, :total_loans, :undo_possible, :redo_possible, :round_history, :all_tiles,
                   :optional_rules, :exception, :last_processed_action, :broken_action,
-                  :turn_start_action_id, :last_turn_start_action_id
+                  :turn_start_action_id, :last_turn_start_action_id, :programmed_actions
 
       DEV_STAGES = %i[production beta alpha prealpha].freeze
       DEV_STAGE = :prealpha
@@ -96,7 +96,7 @@ module Engine
       #   after: When game should end if check triggered
       # Leave out a reason if game does not support that.
       # Allowed reasons:
-      #  bankrupt, stock_market, bank, final_train
+      #  bankrupt, stock_market, bank, final_train, final_phase, custom
       # Allowed after:
       #  immediate - ends in current turn
       #  current_round - ends at the end of the current round
@@ -166,6 +166,7 @@ module Engine
 
       # when can a share holder sell shares
       # first           -- after first stock round
+      # after_ipo       -- after stock round in which company is opened
       # operate         -- after operation
       # p_any_operate   -- pres any time, share holders after operation
       # any_time        -- at any time
@@ -221,10 +222,10 @@ module Engine
       # operating_round // 1889 places on first operating round
       HOME_TOKEN_TIMING = :operate
 
-      DISCARDED_TRAINS = :discard # discarded or removed?
+      DISCARDED_TRAINS = :discard # discard or remove
       DISCARDED_TRAIN_DISCOUNT = 0 # percent
-      CLOSED_CORP_TRAINS = :removed # discarded or removed?
-      CLOSED_CORP_RESERVATIONS = :removed # remain or removed?
+      CLOSED_CORP_TRAINS_REMOVED = true
+      CLOSED_CORP_RESERVATIONS_REMOVED = true
 
       MUST_BUY_TRAIN = :route # When must the company buy a train if it doesn't have one (route, never, always)
 
@@ -234,21 +235,27 @@ module Engine
 
       IMPASSABLE_HEX_COLORS = %i[blue gray red].freeze
 
-      EVENTS_TEXT = { 'close_companies' =>
-                      ['Companies Close', 'All companies unless otherwise noted are discarded from the game'] }.freeze
+      EVENTS_TEXT = {
+        'close_companies' =>
+          ['Companies Close', 'All companies unless otherwise noted are discarded from the game'],
+      }.freeze
 
-      STATUS_TEXT = { 'can_buy_companies' =>
-                      ['Can Buy Companies', 'All corporations can buy companies from players'] }.freeze
+      STATUS_TEXT = {
+        'can_buy_companies' =>
+          ['Can Buy Companies', 'All corporations can buy companies from players'],
+      }.freeze
 
-      MARKET_TEXT = { par: 'Par value',
-                      no_cert_limit: 'Corporation shares do not count towards cert limit',
-                      unlimited: 'Corporation shares can be held above 60%',
-                      multiple_buy: 'Can buy more than one share in the corporation per turn',
-                      close: 'Corporation closes',
-                      endgame: 'End game trigger',
-                      liquidation: 'Liquidation',
-                      repar: 'Par value after bankruptcy',
-                      ignore_one_sale: 'Ignore first share sold when moving price' }.freeze
+      MARKET_TEXT = {
+        par: 'Par value',
+        no_cert_limit: 'Corporation shares do not count towards cert limit',
+        unlimited: 'Corporation shares can be held above 60%',
+        multiple_buy: 'Can buy more than one share in the corporation per turn',
+        close: 'Corporation closes',
+        endgame: 'End game trigger',
+        liquidation: 'Liquidation',
+        repar: 'Par value after bankruptcy',
+        ignore_one_sale: 'Ignore first share sold when moving price',
+      }.freeze
 
       MARKET_SHARE_LIMIT = 50 # percent
       ALL_COMPANIES_ASSIGNABLE = false
@@ -303,6 +310,10 @@ module Engine
 
       # use to modify hexes based on optional rules
       def optional_hexes
+        game_hexes
+      end
+
+      def game_hexes
         self.class::HEXES
       end
 
@@ -360,6 +371,7 @@ module Engine
         data['companies'].map! do |company|
           company.transform_keys!(&:to_sym)
           company[:abilities]&.each { |ability| ability.transform_keys!(&:to_sym) }
+          company[:color] = const_get(:COLORS)[company[:color]&.to_sym] if const_defined?(:COLORS)
           company
         end
 
@@ -367,14 +379,17 @@ module Engine
 
         data['minors'].map! do |minor|
           minor.transform_keys!(&:to_sym)
-          minor[:color] = const_get(:COLORS)[minor[:color]] if const_defined?(:COLORS)
+          minor[:color] = const_get(:COLORS)[minor[:color]&.to_sym] if const_defined?(:COLORS)
+          minor[:abilities]&.each { |ability| ability.transform_keys!(&:to_sym) }
           minor
         end
 
         data['corporations'].map! do |corporation|
           corporation.transform_keys!(&:to_sym)
           corporation[:abilities]&.each { |ability| ability.transform_keys!(&:to_sym) }
-          corporation[:color] = const_get(:COLORS)[corporation[:color]] if const_defined?(:COLORS)
+          corporation[:color] = const_get(:COLORS)[corporation[:color]&.to_sym] if const_defined?(:COLORS)
+          corporation[:reservation_color] =
+            const_get(:COLORS)[corporation[:reservation_color]&.to_sym] if const_defined?(:COLORS)
           corporation
         end
 
@@ -383,7 +398,7 @@ module Engine
 
         hex_ids = data['hexes'].values.map(&:keys).flatten
 
-        dup_hexes = hex_ids.group_by(&:itself).select { |_, v| v.size > 1 } .keys
+        dup_hexes = hex_ids.group_by(&:itself).select { |_, v| v.size > 1 }.keys
         raise GameError, "Found multiple definitions in #{self} for hexes #{dup_hexes}" if dup_hexes.any?
 
         const_set(:CURRENCY_FORMAT_STR, data['currencyFormatStr'])
@@ -417,7 +432,6 @@ module Engine
         @raw_actions = []
         @turn_start_action_id = 0
         @last_turn_start_action_id = 0
-
         @exception = nil
         @names = if names.is_a?(Hash)
                    names.freeze
@@ -426,6 +440,7 @@ module Engine
                  end
 
         @players = @names.map { |player_id, name| Player.new(player_id, name) }
+        @programmed_actions = {}
 
         @optional_rules = init_optional_rules(optional_rules)
 
@@ -458,6 +473,7 @@ module Engine
         @tiles = init_tiles
         @all_tiles = init_tiles
         optional_tiles
+        @tile_groups = []
         @cert_limit = init_cert_limit
         @removals = []
 
@@ -547,9 +563,9 @@ module Engine
         actions.each.with_index do |action, index|
           case action['type']
           when 'undo'
-            undo_to = action[:action_id] || filtered_actions.rindex { |a| a && a['type'] != 'message' }
+            undo_to = action['action_id'] || filtered_actions.rindex { |a| a && a['type'] != 'message' }
             active_undos << filtered_actions[undo_to...index].map.with_index do |a, i|
-              next if !a || a[:type] == 'message'
+              next if !a || a['type'] == 'message'
 
               filtered_actions[undo_to + i] = nil
               [a, undo_to + i]
@@ -580,6 +596,7 @@ module Engine
 
           if action
             action = action.copy(self) if action.is_a?(Action::Base)
+
             process_action(action)
           else
             # Restore the original action to the list to ensure action ids remain consistent but don't apply them
@@ -590,14 +607,40 @@ module Engine
         @loading = false
       end
 
-      def process_action(action)
-        action = action_from_h(action) if action.is_a?(Hash)
+      def process_action(action, add_auto_actions: false)
+        action = Engine::Action::Base.action_from_h(action, self) if action.is_a?(Hash)
+
         action.id = current_action_id + 1
         @raw_actions << action.to_h
         return clone(@raw_actions) if action.is_a?(Action::Undo) || action.is_a?(Action::Redo)
 
         @actions << action
 
+        # Process the main action we came here to do first
+        process_single_action(action)
+
+        unless action.is_a?(Action::Message)
+          @redo_possible = false
+          @undo_possible = true
+          @last_game_action_id = action.id
+        end
+
+        action.auto_actions.each { |a| process_single_action(a) }
+        if add_auto_actions
+          until (actions = round.auto_actions || []).empty?
+            actions.each { |a| process_single_action(a) }
+            action.auto_actions.concat(actions)
+          end
+          # Update the last raw actions as the hash maybe incorrect
+          action.clear_cache
+          @raw_actions[-1] = action.to_h
+        end
+        @last_processed_action = action.id
+
+        self
+      end
+
+      def process_single_action(action)
         if action.user
           @log << "• Action(#{action.type}) via Master Mode by: #{player_by_id(action.user)&.name || 'Owner'}"
         end
@@ -605,12 +648,6 @@ module Engine
         preprocess_action(action)
 
         @round.process_action(action)
-
-        unless action.is_a?(Action::Message)
-          @redo_possible = false
-          @undo_possible = true
-          @last_game_action_id = action.id
-        end
 
         action_processed(action)
 
@@ -628,22 +665,25 @@ module Engine
             next_round!
 
             # Finalize round setup (for things that need round correctly set like place_home_token)
+            @round.at_start = true
             @round.setup
-            @round_history << @actions.size
+            @round_history << current_action_id
           end
         end
-
-        @last_processed_action = action.id
-        self
       rescue Engine::GameError => e
+        @raw_actions.pop
         @actions.pop
         @exception = e
         @broken_action = action
-        self
       end
 
       def maybe_raise!
-        raise @exception if @exception
+        if @exception
+          exception = @exception
+          @exception = nil
+          @broken_action = nil
+          raise exception
+        end
 
         self
       end
@@ -666,6 +706,10 @@ module Engine
         ipoed.sort + others
       end
 
+      def operating_order
+        @minors.select(&:floated?) + @corporations.select(&:floated?).sort
+      end
+
       def operated_operators
         (@corporations + @minors).select(&:operated?)
       end
@@ -683,18 +727,16 @@ module Engine
         @turn_start_action_id = current_action_id
       end
 
-      def action_from_h(h)
-        Object
-          .const_get("Engine::Action::#{Action::Base.type(h['type'])}")
-          .from_h(h, self)
-      end
-
       def clone(actions)
         self.class.new(@names, id: @id, pin: @pin, actions: actions, optional_rules: @optional_rules)
       end
 
       def trains
         @depot.trains
+      end
+
+      def train_limit(entity)
+        @phase.train_limit(entity)
       end
 
       def train_owner(train)
@@ -774,6 +816,23 @@ module Engine
         value
       end
 
+      def check_sale_timing(entity, corporation)
+        case self.class::SELL_AFTER
+        when :first
+          @turn > 1 || @round.operating?
+        when :after_ipo
+          corporation.operated? || @round.operating?
+        when :operate
+          corporation.operated?
+        when :p_any_operate
+          corporation.operated? || corporation.president?(entity)
+        when :any_time
+          true
+        else
+          raise NotImplementedError
+        end
+      end
+
       def value_for_sellable(player, corporation)
         max_bundle = sellable_bundles(player, corporation).max_by(&:price)
         max_bundle&.price || 0
@@ -795,8 +854,10 @@ module Engine
       end
 
       def sellable_bundles(player, corporation)
+        return [] unless @round.active_step&.respond_to?(:can_sell?)
+
         bundles = bundles_for_corporation(player, corporation)
-        bundles.select { |bundle| @round.active_step&.can_sell?(player, bundle) }
+        bundles.select { |bundle| @round.active_step.can_sell?(player, bundle) }
       end
 
       def bundles_for_corporation(share_holder, corporation, shares: nil)
@@ -807,7 +868,7 @@ module Engine
       def all_bundles_for_corporation(share_holder, corporation, shares: nil)
         return [] unless corporation.ipoed
 
-        shares = (shares || share_holder.shares_of(corporation)).sort_by { |h| [h.president ? 1 : 0, h.price] }
+        shares = (shares || share_holder.shares_of(corporation)).sort_by { |h| [h.president ? 1 : 0, h.percent] }
 
         bundles = shares.flat_map.with_index do |share, index|
           bundle = shares.take(index + 1)
@@ -852,6 +913,10 @@ module Engine
           percent = bundle.percent
           percent -= swap.percent if swap
           (percent / 10).to_i.times { @stock_market.move_down(corporation) }
+        when :down_block
+          @stock_market.move_down(corporation)
+        when :left_block
+          @stock_market.move_left(corporation)
         when :left_block_pres
           stock_market.move_left(corporation) if was_president
         when :none
@@ -893,6 +958,7 @@ module Engine
         return if @finished
 
         @finished = true
+        store_player_info
         scores = result.map { |name, value| "#{name} (#{format_currency(value)})" }
         @log << "-- Game over: #{scores.join(', ')} --"
       end
@@ -980,14 +1046,19 @@ module Engine
 
         grouped = visits.group_by(&:type)
 
-        grouped.each do |type, group|
+        grouped.sort_by { |t, _| type_info[t].size }.each do |type, group|
           num = group.sum(&:visit_cost)
 
-          type_info[type].sort_by(&:size).each do |info|
+          type_info[type].each do |info|
             next unless info[:visit].positive?
 
-            info[:visit] -= num
-            num = info[:visit] * -1
+            if num <= info[:visit]
+              info[:visit] -= num
+              num = 0
+            else
+              num -= info[:visit]
+              info[:visit] = 0
+            end
             break unless num.positive?
           end
 
@@ -1235,12 +1306,17 @@ module Engine
         !company.owner.is_a?(Corporation)
       end
 
+      # Called by View::Game::Entities to determine if the company should be shown on entities
+      def unowned_purchasable_companies(_entity)
+        []
+      end
+
       def float_corporation(corporation)
         @log << "#{corporation.name} floats"
 
         return if corporation.capitalization == :incremental
 
-        @bank.spend(corporation.par_price.price * 10, corporation)
+        @bank.spend(corporation.par_price.price * corporation.total_shares, corporation)
         @log << "#{corporation.name} receives #{format_currency(corporation.cash)}"
       end
 
@@ -1253,18 +1329,19 @@ module Engine
 
         hexes.each do |hex|
           hex.tile.cities.each do |city|
-            if city.tokened_by?(corporation) || city.reserved_by?(corporation)
-              city.tokens.map! { |token| token&.corporation == corporation ? nil : token }
-              city.reservations.delete(corporation) if self.class::CLOSED_CORP_RESERVATIONS == :removed
+            city.tokens.select { |t| t&.corporation == corporation }.each(&:remove!)
+
+            if self.class::CLOSED_CORP_RESERVATIONS_REMOVED && city.reserved_by?(corporation)
+              city.reservations.delete(corporation)
             end
           end
         end
 
         corporation.spend(corporation.cash, @bank) if corporation.cash.positive?
-        if self.class::CLOSED_CORP_TRAINS == :discarded
-          corporation.trains.dup.each { |t| depot.reclaim_train(t) }
-        else
+        if self.class::CLOSED_CORP_TRAINS_REMOVED
           corporation.trains.each { |t| t.buyable = false }
+        else
+          corporation.trains.dup.each { |t| depot.reclaim_train(t) }
         end
         if corporation.companies.any?
           @log << "#{corporation.name}'s companies close: #{corporation.companies.map(&:sym).join(', ')}"
@@ -1298,7 +1375,7 @@ module Engine
 
         corporation.companies.dup.each(&:close!)
 
-        corporation.share_price.corporations.delete(corporation)
+        corporation.share_price&.corporations&.delete(corporation)
         corporation = init_corporations(@stock_market).find { |c| c.id == corporation.id }
 
         @corporations.map! { |c| c.id == corporation.id ? corporation : c }
@@ -1351,6 +1428,7 @@ module Engine
       end
 
       def find_share_price(price)
+        # NOTE: this only works on a 2d stock market
         @stock_market
           .market[0]
           .reverse
@@ -1396,16 +1474,17 @@ module Engine
         'IPO Reserved'
       end
 
-      def abilities(entity, type = nil, time: nil, owner_type: nil, strict_time: false)
+      def abilities(entity, type = nil, time: nil, on_phase: nil, passive_ok: nil)
         return nil unless entity
 
         active_abilities = entity.all_abilities.select do |ability|
           ability_right_type?(ability, type) &&
-            ability_right_owner?(ability.owner, ability, owner_type) &&
+            ability_right_owner?(ability.owner, ability) &&
             ability_usable_this_or?(ability) &&
-            ability_right_time?(ability, time, strict_time) &&
+            ability_right_time?(ability, time, on_phase, passive_ok.nil? ? true : passive_ok) &&
             ability_usable?(ability)
         end
+
         active_abilities.each { |a| yield a, a.owner } if block_given?
 
         return nil if active_abilities.empty?
@@ -1426,6 +1505,45 @@ module Engine
         operator.trains << train
         operator.rusted_self = false
         @crowded_corps = nil
+
+        close_companies_on_train!(operator)
+      end
+
+      def close_companies_on_train!(entity)
+        @companies.each do |company|
+          next if company.closed?
+
+          abilities(company, :close, time: 'bought_train') do |ability|
+            next if entity&.name != ability.corporation
+
+            company.close!
+            @log << "#{company.name} closes"
+          end
+        end
+      end
+
+      def discountable_trains_for(corporation)
+        discountable_trains = @depot.depot_trains.select(&:discount)
+
+        corporation.trains.flat_map do |train|
+          discountable_trains.flat_map do |discount_train|
+            discounted_price = discount_train.price(train)
+            next if discount_train.price == discounted_price
+
+            name = discount_train.name
+            discount_info = [[train, discount_train, name, discounted_price]]
+
+            # Add variants if any - they have same discount as base version
+            discount_train.variants.each do |_, v|
+              next if v[:name] == name
+
+              price = v[:price] - (discount_train.price - discounted_price)
+              discount_info << [train, discount_train, v[:name], price]
+            end
+
+            discount_info
+          end.compact
+        end
       end
 
       def remove_train(train)
@@ -1445,7 +1563,7 @@ module Engine
       def crowded_corps
         @crowded_corps ||= corporations.select do |c|
           trains = self.class::OBSOLETE_TRAINS_COUNT_FOR_LIMIT ? c.trains.size : c.trains.count { |t| !t.obsolete }
-          trains > @phase.train_limit(c)
+          trains > train_limit(c)
         end
       end
 
@@ -1463,6 +1581,69 @@ module Engine
         transferred = ownables.dup
         ownables.clear
         transferred
+      end
+
+      def exchange_for_partial_presidency?
+        false
+      end
+
+      def exchange_partial_percent(_share)
+        nil
+      end
+
+      def exchange_corporations(exchange_ability)
+        candidates = if exchange_ability.corporations == 'any'
+                       corporations
+                     else
+                       exchange_ability.corporations.map { |c| corporation_by_id(c) }
+                     end
+        candidates.reject(&:closed?)
+      end
+
+      def round_start?
+        @last_game_action_id == @round_history.last
+      end
+
+      def can_hold_above_limit?(_entity)
+        false
+      end
+
+      def show_game_cert_limit?
+        true
+      end
+
+      def hex_blocked_by_ability?(_entity, ability, hex)
+        ability.hexes.include?(hex.id)
+      end
+
+      def rust_trains!(train, entity)
+        obsolete_trains = []
+        rusted_trains = []
+        owners = Hash.new(0)
+
+        trains.each do |t|
+          next if t.obsolete || t.obsolete_on != train.sym
+
+          obsolete_trains << t.name
+          t.obsolete = true
+        end
+
+        trains.each do |t|
+          next if t.rusted
+
+          should_rust = t.rusts_on == train.sym || (t.obsolete_on == train.sym && @depot.discarded.include?(t))
+          next unless should_rust
+          next unless rust?(t)
+
+          rusted_trains << t.name
+          owners[t.owner.name] += 1
+          entity.rusted_self = true if entity && entity == t.owner
+          rust(t)
+        end
+
+        @log << "-- Event: #{obsolete_trains.uniq.join(', ')} trains are obsolete --" if obsolete_trains.any?
+        @log << "-- Event: #{rusted_trains.uniq.join(', ')} trains rust " \
+          "( #{owners.map { |c, t| "#{c} x#{t}" }.join(', ')}) --" if rusted_trains.any?
       end
 
       private
@@ -1486,7 +1667,11 @@ module Engine
       end
 
       def init_phase
-        Phase.new(self.class::PHASES, self)
+        Phase.new(game_phases, self)
+      end
+
+      def game_phases
+        self.class::PHASES
       end
 
       def init_round
@@ -1494,20 +1679,28 @@ module Engine
       end
 
       def init_stock_market
-        StockMarket.new(self.class::MARKET, self.class::CERT_LIMIT_TYPES,
+        StockMarket.new(game_market, self.class::CERT_LIMIT_TYPES,
                         multiple_buy_types: self.class::MULTIPLE_BUY_TYPES)
       end
 
+      def game_market
+        self.class::MARKET
+      end
+
       def init_companies(players)
-        self.class::COMPANIES.map do |company|
+        game_companies.map do |company|
           next if players.size < (company[:min_players] || 0)
 
           Company.new(**company)
         end.compact
       end
 
+      def game_companies
+        self.class::COMPANIES
+      end
+
       def init_train_handler
-        trains = self.class::TRAINS.flat_map do |train|
+        trains = game_trains.flat_map do |train|
           (train[:num] || num_trains(train)).times.map do |index|
             Train.new(**train, index: index)
           end
@@ -1516,12 +1709,20 @@ module Engine
         Depot.new(trains, self)
       end
 
+      def game_trains
+        self.class::TRAINS
+      end
+
       def num_trains(_train)
         raise NotImplementedError
       end
 
       def init_minors
-        self.class::MINORS.map { |minor| Minor.new(**minor) }
+        game_minors.map { |minor| Minor.new(**minor) }
+      end
+
+      def game_minors
+        self.class::MINORS
       end
 
       def init_loans
@@ -1541,13 +1742,17 @@ module Engine
       end
 
       def init_corporations(stock_market)
-        self.class::CORPORATIONS.map do |corporation|
+        game_corporations.map do |corporation|
           Corporation.new(
             min_price: stock_market.par_prices.map(&:price).min,
             capitalization: self.class::CAPITALIZATION,
             **corporation.merge(corporation_opts),
           )
         end
+      end
+
+      def game_corporations
+        self.class::CORPORATIONS
       end
 
       def init_hexes(companies, corporations)
@@ -1561,24 +1766,28 @@ module Engine
         end
 
         partition_blockers = {}
-        companies.each do |company|
+        partition_companies.each do |company|
           abilities(company, :blocks_partition) do |ability|
             partition_blockers[ability.partition_type] = company
           end
         end
 
         reservations = Hash.new { |k, v| k[v] = [] }
-        corporations.each do |c|
-          reservations[c.coordinates] << { entity: c,
-                                           city: c.city }
+        reservation_corporations.each do |c|
+          reservations[c.coordinates] << {
+            entity: c,
+            city: c.city,
+          }
         end
 
         (corporations + companies).each do |c|
           abilities(c, :reservation) do |ability|
-            reservations[ability.hex] << { entity: c,
-                                           city: ability.city.to_i,
-                                           slot: ability.slot.to_i,
-                                           ability: ability }
+            reservations[ability.hex] << {
+              entity: c,
+              city: ability.city.to_i,
+              slot: ability.slot.to_i,
+              ability: ability,
+            }
           end
         end
 
@@ -1618,8 +1827,20 @@ module Engine
         end.flatten.compact
       end
 
+      def partition_companies
+        companies
+      end
+
+      def reservation_corporations
+        corporations
+      end
+
       def init_tiles
-        self.class::TILES.flat_map { |name, val| init_tile(name, val) }
+        game_tiles.flat_map { |name, val| init_tile(name, val) }
+      end
+
+      def game_tiles
+        self.class::TILES
       end
 
       def init_tile(name, val)
@@ -1752,13 +1973,14 @@ module Engine
           bank: @bank.broken?,
           stock_market: @stock_market.max_reached?,
           final_train: @depot.empty?,
+          final_phase: @phase.phases.last == @phase.current,
           custom: custom_end_game_reached?,
         }.select { |_, t| t }
 
         %i[immediate current_round current_or full_or one_more_full_or_set].each do |after|
           triggers.keys.each do |reason|
             if game_end_check_values[reason] == after
-              (@turn == (@final_turn ||= @turn + 1)) if after == :one_more_full_or_set
+              @final_turn ||= @turn + 1 if after == :one_more_full_or_set
               return [reason, after]
             end
           end
@@ -1786,7 +2008,7 @@ module Engine
       end
 
       def final_operating_rounds
-        operating_rounds
+        @phase.operating_rounds
       end
 
       def game_ending_description
@@ -1820,6 +2042,7 @@ module Engine
           bankrupt: 'Bankruptcy',
           stock_market: 'Company hit max stock value',
           final_train: 'Final train was purchased',
+          final_phase: 'Final phase was reached',
         }
         "#{reason_map[reason]}#{after_text}"
       end
@@ -1854,13 +2077,24 @@ module Engine
         player_order.reject(&:bankrupt).index(entity)
       end
 
-      def reorder_players
-        case self.class::NEXT_SR_PLAYER_ORDER
+      def next_sr_player_order
+        self.class::NEXT_SR_PLAYER_ORDER
+      end
+
+      def reorder_players(order = nil)
+        order ||= next_sr_player_order
+        case order
         when :after_last_to_act
           player = @players.reject(&:bankrupt)[@round.entity_index]
           @players.rotate!(@players.index(player))
         when :first_to_pass
           @players = @round.pass_order if @round.pass_order.any?
+        when :most_cash
+          current_order = @players.dup
+          @players.sort_by! { |p| [p.cash, current_order.index(p)] }.reverse!
+        when :least_cash
+          current_order = @players.dup
+          @players.sort_by! { |p| [p.cash, current_order.index(p)] }
         end
         @log << "#{@players.first.name} has priority deal"
       end
@@ -1910,9 +2144,9 @@ module Engine
       def event_close_companies!
         @log << '-- Event: Private companies close --'
         @companies.each do |company|
-          if (ability = abilities(company, :close))
-            next if ability.when == 'never' ||
-              @phase.phases.any? { |phase| ability.when == phase[:name] }
+          if (ability = abilities(company, :close, on_phase: 'any'))
+            next if ability.on_phase == 'never' ||
+                    @phase.phases.any? { |phase| ability.on_phase == phase[:name] }
           end
 
           company.close!
@@ -1993,15 +2227,36 @@ module Engine
         []
       end
 
+      def count_available_tokens(corporation)
+        corporation.tokens.map { |t| t.used ? 0 : 1 }.sum
+      end
+
+      def token_string(corporation)
+        "#{count_available_tokens(corporation)}/#{corporation.tokens.size}"
+      end
+
+      # minors to show on player cards
+      def player_card_minors(_player)
+        []
+      end
+
+      def player_sort(entities)
+        entities.sort_by(&:name).group_by(&:owner)
+      end
+
       def bank_sort(corporations)
         corporations.sort_by(&:name)
+      end
+
+      def info_on_trains(phase)
+        Array(phase[:on]).first
       end
 
       def ability_right_type?(ability, type)
         !type || (ability.type == type)
       end
 
-      def ability_right_owner?(entity, ability, owner_type)
+      def ability_right_owner?(entity, ability)
         correct_owner_type =
           case ability.owner_type
           when :player
@@ -2011,35 +2266,66 @@ module Engine
           when nil
             true
           end
-        return false unless correct_owner_type
-        return false if owner_type && (ability.owner_type.to_s != owner_type.to_s)
 
-        true
+        !!correct_owner_type
       end
 
       def ability_usable_this_or?(ability)
         !ability.count_per_or || (ability.count_this_or < ability.count_per_or)
       end
 
-      def ability_right_time?(ability, time, strict_time)
-        return false if strict_time && !ability.when
-        return true unless time
+      def ability_right_time?(ability, time, on_phase, passive_ok)
+        return true unless @round
+        return true if time == 'any' || ability.when?('any')
+        return (on_phase == ability.on_phase) || (on_phase == 'any') if on_phase
+        return false if ability.passive && !passive_ok
+        return true if ability.passive && ability.when.empty?
 
-        if (ability.type == :tile_lay) && (step = ability_blocking_step)&.is_a?(Step::SpecialTrack)
-          return step.company == ability.owner
+        # using active_step causes an infinite loop
+        current_step = ability_blocking_step
+        current_step_name = current_step&.type
+
+        if ability.type == :tile_lay && ability.must_lay_all && current_step&.is_a?(Step::SpecialTrack)
+          return current_step.company == ability.owner
         end
 
-        if ability.when == 'any'
-          !strict_time
-        elsif ability.when == 'owning_corp_or_turn'
-          %w[owning_corp_or_turn track].include?(time)
-        else
-          ability.when == time.to_s
+        return false if @round.operating? &&
+                        ability.owner.owned_by_corporation? &&
+                        @round.current_operator != ability.corporation &&
+                        !ability.when?('other_or')
+
+        times = Array(time).map { |t| t == '%current_step%' ? current_step_name : t.to_s }
+        return ability.when?(*times) unless times.empty?
+
+        ability.when.any? do |ability_when|
+          case ability_when
+          when current_step_name
+            (@round.operating? && @round.current_operator == ability.corporation) ||
+              (@round.stock? && @round.current_entity == ability.player)
+          when 'owning_corp_or_turn'
+            @round.operating? && @round.current_operator == ability.corporation
+          when 'owning_player_sr_turn'
+            @round.stock? && @round.current_entity == ability.player
+          when 'other_or'
+            @round.operating? && @round.current_operator != ability.corporation
+          when 'or_start'
+            ability_time_is_or_start?
+          else
+            false
+          end
         end
       end
 
+      def ability_time_is_or_start?
+        @round.operating? && @round.at_start
+      end
+
       def ability_blocking_step
-        @round.steps.find { |step| step.blocks? && !step.passed? }
+        @round.steps.find do |step|
+          # currently, abilities only care about Tracker, the is_a? check could
+          # be expanded to a list of possible classes/modules when needed
+          step.is_a?(Step::Tracker) && !step.passed? && step.blocks?
+        end
       end
 
       def ability_usable?(ability)

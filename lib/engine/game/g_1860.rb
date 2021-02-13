@@ -2,8 +2,6 @@
 
 require_relative '../config/game/g_1860'
 require_relative 'base'
-require_relative '../g_1860/bank'
-require_relative '../g_1860/share_pool'
 
 module Engine
   module Game
@@ -23,10 +21,10 @@ module Engine
       GAME_LOCATION = 'Isle of Wight'
       GAME_RULES_URL = 'https://www.dropbox.com/s/usfbqtdjzx6ug8f/1860-rules.pdf'
       GAME_DESIGNER = 'Mike Hutton'
-      GAME_PUBLISHER = nil
+      GAME_PUBLISHER = :all_aboard_games
       GAME_INFO_URL = 'https://github.com/tobymao/18xx/wiki/1860'
 
-      DEV_STAGE = :alpha
+      DEV_STAGE = :production
 
       EBUY_PRES_SWAP = false # allow presidential swaps of other corps when ebuying
       EBUY_OTHER_VALUE = false # allow ebuying other corp trains for up to face
@@ -55,15 +53,17 @@ module Engine
         safe_par: :white,
       }.freeze
 
-      MARKET_TEXT = { par: 'Par values (varies by corporation)',
-                      no_cert_limit: 'UNUSED',
-                      unlimited: 'UNUSED',
-                      multiple_buy: 'UNUSED',
-                      close: 'Corporation bankrupts',
-                      endgame: 'End game trigger',
-                      liquidation: 'UNUSED',
-                      repar: 'Par values after bankruptcy (varies by corporation)',
-                      ignore_one_sale: 'Ignore first share sold when moving price' }.freeze
+      MARKET_TEXT = {
+        par: 'Par values (varies by corporation)',
+        no_cert_limit: 'UNUSED',
+        unlimited: 'UNUSED',
+        multiple_buy: 'UNUSED',
+        close: 'Corporation bankrupts',
+        endgame: 'End game trigger',
+        liquidation: 'UNUSED',
+        repar: 'Par values after bankruptcy (varies by corporation)',
+        ignore_one_sale: 'Ignore first share sold when moving price',
+      }.freeze
 
       HALT_SUBSIDY = 10
 
@@ -74,18 +74,26 @@ module Engine
       ).freeze
 
       OPTIONAL_RULES = [
-        { sym: :two_player_map,
+        {
+          sym: :two_player_map,
           short_name: '2-3P map',
-          desc: 'Use the smaller first edition map suitable for 2-3 players' },
-        { sym: :original_insolvency,
+          desc: 'Use the smaller first edition map suitable for 2-3 players',
+        },
+        {
+          sym: :original_insolvency,
           short_name: 'Original insolvency',
-          desc: 'Use the original (first edition) insolvency rules' },
-        { sym: :no_skip_towns,
+          desc: 'Use the original (first edition) insolvency rules',
+        },
+        {
+          sym: :no_skip_towns,
           short_name: 'No skipping towns',
-          desc: "Use the original (first edition) town rules - they can't be skipped on runs" },
-        { sym: :original_game,
+          desc: "Use the original (first edition) town rules - they can't be skipped on runs",
+        },
+        {
+          sym: :original_game,
           short_name: 'First edition rules and map',
-          desc: 'Use all of the first edition rules (smaller map, original insolvency, no skipping towns)' },
+          desc: 'Use all of the first edition rules (smaller map, original insolvency, no skipping towns)',
+        },
       ].freeze
 
       OPTION_REMOVE_HEXES = %w[A5 A7 B4 E11].freeze
@@ -131,11 +139,11 @@ module Engine
 
       def init_bank
         # amount doesn't matter here
-        Engine::G1860::Bank.new(20_000, self, log: @log)
+        Bank.new(20_000, log: @log, check: false)
       end
 
       def init_share_pool
-        Engine::G1860::SharePool.new(self)
+        SharePool.new(self, allow_president_sale: true)
       end
 
       def option_23p_map?
@@ -194,6 +202,10 @@ module Engine
         @southern_formed = false
         @sr_after_southern = false
         @nationalization = false
+      end
+
+      def corporation_opts
+        { float_excludes_market: true }
       end
 
       def share_prices
@@ -325,6 +337,10 @@ module Engine
           company_value
       end
 
+      def operating_order
+        @corporations.select { |c| c.floated? && !nationalized?(c) }.sort
+      end
+
       def place_home_token(corporation)
         # will this break the game?
         return if sr_after_southern
@@ -345,7 +361,8 @@ module Engine
       end
 
       def event_southern_forms!
-        @log << 'Southern Railway Forms; End of game triggered (via Nationalization).'
+        @log << 'Southern Railway Forms; '\
+                'Nationalization will be triggered when all players’ companies have at least one train.'
         @southern_formed = true
       end
 
@@ -469,10 +486,11 @@ module Engine
         @players.rotate!(@players.index(player))
         @log << "#{@players.first.name} has priority deal"
 
+        @round.force_next_entity! if @round.operating?
+        return unless @round.stock?
+
         # restart stock round if in middle of one
         @round.clear_cache!
-        return unless @round.class == Round::Stock
-
         @log << 'Restarting Stock Round'
         @round.entities.each(&:unpass!)
         @round = stock_round
@@ -565,10 +583,12 @@ module Engine
         super
       end
 
-      def action_processed(_action)
-        @corporations.each do |corporation|
-          make_bankrupt!(corporation) if corporation.share_price&.type == :close
-        end
+      def action_processed(_action); end
+
+      def check_bankruptcy!(entity)
+        return unless entity.corporation?
+
+        make_bankrupt!(entity) if entity.share_price&.type == :close
       end
 
       def sorted_corporations
@@ -584,7 +604,7 @@ module Engine
 
         shares = (shares || share_holder.shares_of(corporation)).sort_by(&:price)
 
-        bundles = shares.flat_map.with_index do |share, index|
+        shares.flat_map.with_index do |share, index|
           bundle = shares.take(index + 1)
           percent = bundle.sum(&:percent)
           bundles = [Engine::ShareBundle.new(bundle, percent)]
@@ -599,8 +619,6 @@ module Engine
           bundles.each { |b| b.share_price = (b.price_per_share / 2).to_i if corporation.trains.empty? }
           bundles
         end
-
-        bundles
       end
 
       def selling_movement?(corporation)
@@ -616,6 +634,7 @@ module Engine
         num_shares -= 1 if corporation.share_price.type == :ignore_one_sale
         num_shares.times { @stock_market.move_left(corporation) } if selling_movement?(corporation)
         log_share_price(corporation, price)
+        check_bankruptcy!(corporation)
       end
 
       def close_other_companies!(company)
@@ -668,6 +687,7 @@ module Engine
         if trains.select { |t| t.owner == @depot }.any? && !option_original_insolvency?
           help << 'Leased trains ignore town/halt allowance.'
           help << "Revenue = #{format_currency(40)} + number_of_stops * #{format_currency(20)}"
+          help << "Max revenue possible: #{format_currency(40 + @depot.min_depot_train.distance[0]['pay'] * 20)}"
         end
         if trains.select { |t| t.owner == @depot }.any? && option_original_insolvency?
           help << 'Leased trains run for half revenue (but full subsidies).'
@@ -927,7 +947,7 @@ module Engine
         return false unless visits.size > 2
 
         corporation = route.corporation
-        visits[1..-2].any? { |node| node.city? && node.blocks?(corporation) }
+        visits[1..-2].any? { |node| node.city? && custom_blocks?(node, corporation) }
       end
 
       def check_connected(route, token)
@@ -1084,7 +1104,7 @@ module Engine
         end
 
         # update route halts
-        route.halts = num_halts if (num_halts.positive? || route.halts) && !loaner_new_rules?(route)
+        route.halts = num_halts if (!halts.empty? || route.halts) && !loaner_new_rules?(route) && !ignore_halts?
 
         stops
       end
@@ -1120,6 +1140,14 @@ module Engine
 
       def routes_subsidy(routes)
         routes.sum(&:subsidy)
+      end
+
+      def player_sort(entities)
+        entities.sort_by(&:name).sort_by { |e| corp_layer(e) }.group_by(&:owner)
+      end
+
+      def bank_sort(entities)
+        entities.sort_by(&:name).sort_by { |e| corp_layer(e) }
       end
     end
   end

@@ -9,10 +9,12 @@ module View
       include Actionable
       include Lib::Settings
 
-      needs :user
+      needs :user, default: nil
       needs :negative_pad, default: false
       needs :follow_scroll, default: true, store: true
       needs :selected_action_id, default: nil, store: true
+      needs :limit, default: nil
+      needs :scroll_pos, default: nil
 
       def render
         children = [render_log]
@@ -34,20 +36,24 @@ module View
         end
 
         if participant?
-          children << h(:div, { style: {
-            margin: '1vmin 0',
-            display: 'flex',
-            flexDirection: 'row',
-          } }, [
-            h(:span, { style: {
-              fontWeight: 'bold',
-              margin: 'auto 0',
-            } }, [@user['name'] + ':']),
+          children << h(:div, {
+                          style: {
+                            margin: '0 0 1vmin 0',
+                            display: 'flex',
+                            flexDirection: 'row',
+                          },
+                        }, [
+            h(:span, {
+                style: {
+                  fontWeight: 'bold',
+                  margin: 'auto 0',
+                },
+              }, [@user['name'] + ':']),
             h(:input,
               style: {
-              marginLeft: '0.5rem',
-              flex: '1',
-            },
+                marginLeft: '0.5rem',
+                flex: '1',
+              },
               on: { keyup: enter }),
             ])
         end
@@ -73,7 +79,8 @@ module View
 
         actions = @game.actions.map { |a| [a.id, a] }.to_h
 
-        the_log = @game.log.group_by(&:action_id).flat_map do |action_id, entries|
+        log = @limit ? @game.log.last(@limit) : @game.log
+        the_log = log.group_by(&:action_id).flat_map do |action_id, entries|
           children = []
           action = actions[action_id] || blank_action
 
@@ -93,6 +100,10 @@ module View
           elm.scrollTop = elm.scrollHeight
         end
 
+        scroll_to_pos = lambda do |vnode|
+          Native(vnode)['elm'].scrollTop = @scroll_pos
+        end
+
         scroll_handler = lambda do |event|
           elm = Native(event).target
           bottom = elm.scrollHeight - elm.scrollTop <= elm.clientHeight + 5
@@ -103,7 +114,7 @@ module View
           key: 'log',
           hook: {
             postpatch: ->(_, vnode) { scroll_to_bottom.call(vnode) },
-            insert: ->(vnode) { scroll_to_bottom.call(vnode) },
+            insert: ->(vnode) { @scroll_pos ? scroll_to_pos.call(vnode) : scroll_to_bottom.call(vnode) },
             destroy: -> { store(:follow_scroll, true, skip: true) },
           },
           on: { scroll: scroll_handler },
@@ -127,8 +138,12 @@ module View
       end
 
       def render_log_for_action(log, action)
-        timestamp_props = { style: { margin: '0 0.2rem',
-                                     fontSize: 'smaller' } }
+        timestamp_props = {
+          style: {
+            margin: '0 0.2rem 0 0',
+            fontSize: 'smaller',
+          },
+        }
         message_props = { style: { margin: '0 0.2rem' } }
 
         timestamp = "[#{Time.at(action.created_at || Time.now).strftime('%R')}]"
@@ -140,15 +155,19 @@ module View
         action_log = log.flat_map do |entry|
           line = entry.message
 
-          line_props = { style: { marginTop: '0.5em',
-                                  marginBottom: '0.2rem',
-                                  paddingLeft: '0.5rem',
-                                  textIndent: '-0.5rem' },
-                         on: { click: click } }
+          line_props = {
+            style: {
+              marginBottom: '0.2rem',
+              paddingLeft: '0.5rem',
+              textIndent: '-0.5rem',
+            },
+            on: { click: click },
+          }
           line_props[:style][:fontWeight] = 'bold' if line.is_a?(String) && line.start_with?('--')
 
           if line.is_a?(Engine::Action::Message)
             line_props[:style][:fontWeight] = 'bold'
+            line_props[:style][:marginTop] = '0.5em'
 
             sender = line.entity.name || line.user
             line = "#{sender}: #{line.message}"
@@ -173,8 +192,8 @@ module View
           store(:selected_action_id, nil, skip: true)
         end
 
-        h(:div, [history_link('Review from Here', '', action_id, {}, true),
-                 h(:button, { on: { click: rewind_action } }, 'Rewind to Here')])
+        h(:div, [history_link('Review from Here', '', action_id, { margin: '0 1rem 0.5rem 0' }, true),
+                 h(:button, { style: { margin: '0 0 0.5rem 0' }, on: { click: rewind_action } }, 'Undo to Here')])
       end
 
       def render_date_banner(time)

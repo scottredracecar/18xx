@@ -25,7 +25,7 @@ module Engine
       load_from_json(Config::Game::G18CO::JSON)
       AXES = { x: :number, y: :letter }.freeze
 
-      DEV_STAGE = :alpha
+      DEV_STAGE = :beta
 
       GAME_LOCATION = 'Colorado, USA'
       GAME_RULES_URL = 'https://drive.google.com/open?id=0B3lRHMrbLMG_eEp4elBZZ0toYnM'
@@ -45,7 +45,10 @@ module Engine
       MAX_SHARE_VALUE = 485
 
       # Two tiles can be laid, only one upgrade
-      TILE_LAYS = [{ lay: true, upgrade: true }, { lay: true, upgrade: :not_if_upgraded }].freeze
+      TILE_LAYS = [
+        { lay: true, upgrade: true },
+        { lay: true, upgrade: :not_if_upgraded, cannot_reuse_same_hex: true },
+      ].freeze
       REDUCED_TILE_LAYS = [{ lay: true, upgrade: true }].freeze
 
       # First 3 are Denver, Second 3 are CO Springs
@@ -119,6 +122,25 @@ module Engine
         ]
       ).freeze
 
+      OPTIONAL_RULES = [
+        {
+          sym: :priority_order_pass,
+          short_name: 'Priority Order Pass',
+          desc: 'Priority is awarded in pass order in both Auction and Stock Rounds.',
+        },
+        {
+          sym: :pay_per_trash,
+          short_name: 'Pay Per Trash',
+          desc: 'Selling multiple shares before a corporation\'s first Operating Round returns the '\
+                'amount listed in each movement down on the market, starting at the current share price.',
+        },
+        {
+          sym: :major_investors,
+          short_name: 'Major Investors',
+          desc: 'The Presidency cannot be transferred to another player during Corporate Share Buying.',
+        },
+      ].freeze
+
       include CompanyPrice50To150Percent
 
       def ipo_name(_entity = nil)
@@ -141,6 +163,12 @@ module Engine
         setup_company_price_50_to_150_percent
         setup_corporations
         @presidents_choice = nil
+      end
+
+      def next_sr_player_order
+        return :first_to_pass if @optional_rules&.include?(:priority_order_pass)
+
+        super
       end
 
       def setup_corporations
@@ -215,12 +243,12 @@ module Engine
         Round::Operating.new(self, [
         Step::Bankrupt,
         Step::G18CO::Takeover,
-        Step::DiscardTrain,
+        Step::G18CO::DiscardTrain,
         Step::G18CO::HomeToken,
         Step::G18CO::ReturnToken,
         Step::BuyCompany,
         Step::G18CO::RedeemShares,
-        Step::CorporateBuyShares,
+        Step::G18CO::CorporateBuyShares,
         Step::G18CO::SpecialTrack,
         Step::G18CO::Track,
         Step::Token,
@@ -236,7 +264,7 @@ module Engine
       def stock_round
         Round::G18CO::Stock.new(self, [
         Step::G18CO::Takeover,
-        Step::DiscardTrain,
+        Step::G18CO::DiscardTrain,
         Step::G18CO::BuySellParShares,
         ])
       end
@@ -397,7 +425,7 @@ module Engine
       end
 
       def revenue_str(route)
-        str = super
+        str = route.stops.map { |s| s.hex.name }.join('-')
 
         bonus = east_west_bonus(route.stops)[:description]
         str += " + #{bonus}" if bonus
@@ -539,7 +567,8 @@ module Engine
         return [] unless entity.num_ipo_shares
 
         bundles_for_corporation(entity, entity)
-          .select { |bundle| bundle.shares.size == 1 && @share_pool.fit_in_bank?(bundle) }
+          .select { |bundle| @share_pool.fit_in_bank?(bundle) }
+          .map { |bundle| reduced_bundle_price_for_market_drop(bundle) }
       end
 
       def redeemable_shares(entity)
@@ -549,8 +578,30 @@ module Engine
           .reject { |bundle| entity.cash < bundle.price }
       end
 
+      def sellable_bundles(player, corporation)
+        bundles = super
+        return bundles unless @optional_rules&.include?(:pay_per_trash)
+        return bundles if corporation.operated?
+
+        bundles.map { |bundle| reduced_bundle_price_for_market_drop(bundle) }
+      end
+
+      # we can use this same logic for issuing multiple shares
+      def reduced_bundle_price_for_market_drop(bundle)
+        return bundle if bundle.num_shares == 1
+
+        new_price = (0..bundle.num_shares - 1).sum do |max_drops|
+          @stock_market.find_share_price(bundle.corporation, (1..max_drops).map { |_| :up }).price
+        end
+
+        bundle.share_price = new_price / bundle.num_shares
+
+        bundle
+      end
+
       def all_bundles_for_corporation(share_holder, corporation, shares: nil)
         return [] unless corporation.ipoed
+        return super unless corporation == dsng
 
         shares = (shares || share_holder.shares_of(corporation)).sort_by { |h| [h.president ? 1 : 0, h.price] }
 
@@ -563,6 +614,10 @@ module Engine
         bundles.sort_by { |b| [b.presidents_share ? 1 : 0, b.percent, -b.shares.size] }.uniq(&:percent)
       end
 
+      def buying_power(entity)
+        entity.cash
+      end
+
       def purchasable_companies(entity = nil)
         @companies.select do |company|
           !company.closed? &&
@@ -570,6 +625,10 @@ module Engine
             (entity.nil? || entity != company.owner) &&
             !abilities(company, :no_buy)
         end
+      end
+
+      def unowned_purchasable_companies(_entity)
+        @companies.select { |company| !company.closed? && company.owner.nil? }
       end
 
       def entity_can_use_company?(entity, company)
@@ -583,10 +642,8 @@ module Engine
         value - drgr.value
       end
 
-      private
-
-      def ability_blocking_step
-        @round.steps.find { |step| step.blocks? && !step.passed? && !step.is_a?(Step::DiscardTrain) }
+      def train_limit(entity)
+        super + Array(abilities(entity, :train_limit)).sum(&:increase)
       end
     end
   end

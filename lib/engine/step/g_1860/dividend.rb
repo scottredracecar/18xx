@@ -40,6 +40,7 @@ module Engine
           payout_shares(entity, revenue) if payout[:per_share].positive?
           change_share_price(entity, payout)
           @game.check_bank_broken!
+          @game.check_bankruptcy!(entity)
 
           pass!
         end
@@ -98,6 +99,10 @@ module Engine
 
           @log << "#{entity.name} pays out #{@game.format_currency(revenue)} = "\
             "#{@game.format_currency(per_share)} (#{receivers})"
+        end
+
+        def movement_str(times, dir)
+          "#{times / 2} #{dir}"
         end
       end
     end

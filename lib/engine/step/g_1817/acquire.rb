@@ -15,6 +15,7 @@ module Engine
         attr_reader :auctioning, :last_president, :buyer
 
         def actions(entity)
+          return [] if entity.company?
           return %w[assign pass] if @offer
           return %w[bid pass] if @auctioning
           return %w[take_loan pass] if can_take_loan?(entity)
@@ -57,7 +58,7 @@ module Engine
 
         def active_entities
           # Double check that a cash crisis hasn't just been resolved, as the corp may now be in liquidation.
-          if auctioning_corporation && corporation_entered_acquisition_this_round?(auctioning_corporation)
+          if !@buyer && auctioning_corporation && corporation_entered_acquisition_this_round?(auctioning_corporation)
             @game.log << "#{auctioning_corporation.name} is no longer eligible to be auctioned"
             @round.offering.delete(auctioning_corporation)
             @offer = nil
@@ -231,7 +232,10 @@ module Engine
             @round.corporations_removing_tokens = [buyer, acquired_corp]
           else
             tokens = move_tokens_to_surviving(buyer, acquired_corp)
-            receiving << "and tokens (#{tokens.size}: hexes #{tokens.compact})"
+            charter_tokens = tokens.size - tokens.compact.size
+            receiving << 'and ' unless receiving.empty?
+            receiving << "tokens (#{tokens.size}: #{tokens.compact.size} on hexes #{tokens.compact}"\
+            "#{charter_tokens.positive? ? " & #{charter_tokens} on the charter" : ''})"
           end
           @game.log << "#{buyer.name} acquires #{acquired_corp.name} "\
             "receiving #{receiving.join(', ')}"
@@ -347,7 +351,12 @@ module Engine
 
         def finalize_acquisition(acquired_corp)
           # Step 10
-          @round.cash_crisis_player = acquired_corp.owner unless acquired_corp.owner == @game.share_pool
+          @round.cash_crisis_player =
+            if acquired_corp.owner == @game.share_pool
+              @game.owner_when_liquidated[acquired_corp]
+            else
+              acquired_corp.owner
+            end
           @game.reset_corporation(acquired_corp)
           @shareholder_cash = 0
           @buyer = nil

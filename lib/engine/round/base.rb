@@ -11,11 +11,12 @@ module Engine
   module Round
     class Base
       attr_reader :entities, :entity_index, :round_num, :steps
-      attr_accessor :last_to_act, :pass_order
+      attr_accessor :last_to_act, :pass_order, :at_start
 
       DEFAULT_STEPS = [
         Step::EndGame,
         Step::Message,
+        Step::Program,
       ].freeze
 
       def initialize(game, steps, **opts)
@@ -66,10 +67,6 @@ module Engine
         active_step&.current_entity == entity
       end
 
-      def teleported?(_entity)
-        false
-      end
-
       def pass_description
         active_step.pass_description
       end
@@ -95,6 +92,8 @@ module Engine
 
         step.acted = true
         step.send("process_#{action.type}", action)
+
+        @at_start = false
 
         after_process_before_skip(action)
         skip_steps
@@ -128,6 +127,10 @@ module Engine
         @active_step ||= @steps.find { |step| step.active? && step.blocking? }
       end
 
+      def auto_actions
+        active_step&.auto_actions(current_entity)
+      end
+
       def finished?
         !active_step
       end
@@ -151,6 +154,10 @@ module Engine
       end
 
       def operating?
+        false
+      end
+
+      def stock?
         false
       end
 

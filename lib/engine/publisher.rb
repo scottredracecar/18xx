@@ -41,7 +41,15 @@ module Engine
       },
       self_published: {
         name: 'Self-published',
-        url: 'https://www.google.com/',
+        url: 'https://18xx.games',
+      },
+      lookout: {
+        name: 'Lookout Games',
+        url: 'https://lookout-spiele.de/',
+      },
+      marflow_games: {
+        name: 'Marflow Games',
+        url: 'https://18xx-marflow-games.de/',
       },
     }.freeze
   end

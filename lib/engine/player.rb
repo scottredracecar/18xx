@@ -35,6 +35,10 @@ module Engine
       self
     end
 
+    def corporation
+      nil
+    end
+
     def ==(other)
       other&.player? && (@name == other&.name)
     end
@@ -45,6 +49,10 @@ module Engine
 
     def to_s
       "#{self.class.name} - #{@name}"
+    end
+
+    def inspect
+      "<#{self.class.name} - #{@name}>"
     end
   end
 end

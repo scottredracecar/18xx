@@ -9,7 +9,7 @@ module View
       include Actionable
       include EmergencyMoney
       needs :show_other_players, default: nil, store: true
-      needs :selected_corporation, default: nil, store: true
+      needs :corporation, default: nil
       needs :active_shell, default: nil, store: true
 
       def render_president_contributions
@@ -68,9 +68,9 @@ module View
 
       def render
         step = @game.round.active_step
-        @corporation = step.current_entity
+        @corporation ||= step.current_entity
         if @selected_company&.owner == @corporation
-          @ability = @game.abilities(@selected_company, :train_discount, time: 'train')
+          @ability = @game.abilities(@selected_company, :train_discount, time: 'buying_train')
         end
 
         @depot = @game.depot
@@ -82,8 +82,6 @@ module View
 
         @must_buy_train = step.must_buy_train?(@corporation)
         @should_buy_train = step.should_buy_train?(@corporation)
-
-        @president_may_contribute = step.president_may_contribute?(@corporation, @active_shell)
 
         h3_props = {
           style: {
@@ -100,6 +98,7 @@ module View
         }
 
         if @corporation.system?
+          store(:active_shell, @corporation.shells.first, skip: true) unless @active_shell
           children << render_shells
         else
           store(:active_shell, nil, skip: true)
@@ -118,7 +117,7 @@ module View
           ])
         end
 
-        discountable_trains = @depot.discountable_trains_for(@corporation)
+        discountable_trains = @game.discountable_trains_for(@corporation)
 
         if discountable_trains.any? && step.discountable_trains_allowed?(@corporation)
           children << h(:h3, h3_props, 'Exchange Trains')
@@ -155,7 +154,8 @@ module View
                               'must issue shares before the president may contribute).')
         end
 
-        if (@must_buy_train && step.ebuy_president_can_contribute?(@corporation)) || @president_may_contribute
+        if (@must_buy_train && step.ebuy_president_can_contribute?(@corporation)) ||
+           step.president_may_contribute?(@corporation, @active_shell)
           children.concat(render_president_contributions)
         end
 
@@ -215,14 +215,22 @@ module View
               attrs: price_range(group[0]),
             )
 
-            buy_train = lambda do
+            buy_train_click = lambda do
               price = input.JS['elm'].JS['value'].to_i
-              process_action(Engine::Action::BuyTrain.new(
-                @corporation,
-                train: group[0],
-                price: price,
-                shell: @active_shell,
-              ))
+              buy_train = lambda do
+                process_action(Engine::Action::BuyTrain.new(
+                  @corporation,
+                  train: group[0],
+                  price: price,
+                  shell: @active_shell,
+                ))
+              end
+
+              if other.owner == @corporation.owner
+                buy_train.call
+              else
+                check_consent(other.owner, buy_train)
+              end
             end
 
             count = group.size
@@ -231,7 +239,7 @@ module View
               [h(:div, name),
                h('div.nowrap', "#{other.name} (#{count > 1 ? "#{count}, " : ''}#{other.owner.name})"),
                input,
-               h('button.no_margin', { on: { click: buy_train } }, 'Buy')]
+               h('button.no_margin', { on: { click: buy_train_click } }, 'Buy')]
             else
               hidden_trains = true
               nil

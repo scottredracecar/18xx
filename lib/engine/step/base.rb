@@ -1,10 +1,12 @@
 # frozen_string_literal: true
 
+require_relative '../helper/type'
 require_relative '../passer'
 
 module Engine
   module Step
     class Base
+      include Helper::Type
       include Passer
       attr_accessor :acted
 
@@ -29,6 +31,8 @@ module Engine
       def actions(_entity)
         []
       end
+
+      def auto_actions(_entity); end
 
       def available_hex(entity, hex); end
 
@@ -55,9 +59,10 @@ module Engine
       end
 
       def current_actions
-        return [] if current_entity&.closed?
+        entity = current_entity
+        return [] if !entity || entity.closed?
 
-        current_entity ? actions(current_entity) : []
+        actions(entity)
       end
 
       def current_entity
@@ -111,6 +116,12 @@ module Engine
       end
 
       def try_take_loan(entity, price); end
+
+      def try_take_player_loan(entity, price); end
+
+      def inspect
+        "<#{self.class.name}>"
+      end
     end
   end
 end

@@ -2,13 +2,14 @@
 
 module Engine
   class Token
-    attr_reader :corporation, :logo
+    attr_reader :corporation, :logo, :simple_logo
     attr_accessor :city, :price, :type, :used, :status
 
-    def initialize(corporation, price: 0, logo: nil, type: :normal)
+    def initialize(corporation, price: 0, logo: nil, simple_logo: nil, type: :normal)
       @corporation = corporation
       @price = price
       @logo = logo || corporation.logo
+      @simple_logo = simple_logo || corporation&.simple_logo || @logo
       @used = false
       @type = type
       @city = nil
@@ -17,7 +18,7 @@ module Engine
 
     def destroy!
       @corporation.tokens.delete(self)
-      @city.tokens.map! { |t| t == self ? nil : t }
+      remove!
     end
 
     def remove!

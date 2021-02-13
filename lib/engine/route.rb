@@ -5,7 +5,7 @@ require_relative 'game_error'
 module Engine
   class Route
     attr_accessor :halts
-    attr_reader :last_node, :phase, :train, :routes
+    attr_reader :last_node, :phase, :train, :routes, :abilities
 
     def initialize(game, phase, train, **opts)
       @game = game
@@ -19,14 +19,15 @@ module Engine
       @revenue_str = opts[:revenue_str]
       @subsidy = opts[:subsidy]
       @halts = opts[:halts]
+      @abilities = opts[:abilities]
 
       @connection_data = nil
       @last_node = nil
       @stops = nil
     end
 
-    def clear_cache!
-      @connection_hexes = nil
+    def clear_cache!(all: false)
+      @connection_hexes = nil if all
       @hexes = nil
       @revenue = nil
       @revenue_str = nil
@@ -35,7 +36,7 @@ module Engine
     end
 
     def reset!
-      clear_cache!
+      clear_cache!(all: true)
 
       @halts = nil
       @connection_data = nil
@@ -122,9 +123,12 @@ module Engine
             connection_data << segment(connection, left: tail[:right])
           end
         end
+        connection_data.pop if @train.local? && connection_data.size == 2
       elsif @last_node == node
         @last_node = nil
+        connection_data.clear
       elsif @last_node
+        connection_data.clear
         if (connection = select(@last_node, node)[0])
           a, b = connection.nodes
           a, b = b, a if @last_node == a
@@ -132,9 +136,11 @@ module Engine
         end
       else
         @last_node = node
+        add_single_node_connection(node) if @train.local? && @connection_data.empty?
       end
 
-      @routes.each(&:clear_cache!)
+      @halts = nil
+      @routes.each { |r| r.clear_cache!(all: true) }
     end
 
     def paths
@@ -172,6 +178,8 @@ module Engine
     end
 
     def check_cycles!
+      return if @train.local?
+
       cycles = {}
 
       connection_data.each do |c|
@@ -220,7 +228,9 @@ module Engine
       @revenue ||=
         begin
           visited = visited_stops
-          raise GameError, 'Route must have at least 2 stops' if connection_data.any? && visited.size < 2
+          if !connection_data.empty? && visited.size < 2 && !@train.local?
+            raise GameError, 'Route must have at least 2 stops'
+          end
           unless (token = visited.find { |stop| @game.city_tokened_by?(stop, corporation) })
             raise GameError, 'Route must contain token'
           end
@@ -255,10 +265,18 @@ module Engine
     end
 
     def connection_hexes
-      @connection_hexes ||= connections&.map(&:id)
+      @connection_hexes ||= if @train.local? && connection_data.one? && connection_data[0][:connection].paths.empty?
+                              [['local', connection_data[0][:left].hex.id]]
+                            else
+                              connections&.map(&:id)
+                            end
     end
 
     private
+
+    def add_single_node_connection(node)
+      @connection_data << { left: node, right: node, connection: Connection.new }
+    end
 
     def find_connections(connections_a, connections_b, other_paths)
       connections_a = connections_a.select { |a| (a.paths & other_paths).empty? }
@@ -282,6 +300,17 @@ module Engine
 
       @connection_data = []
       return @connection_data unless @connection_hexes
+
+      if @connection_hexes.one? && @connection_hexes[0].include?('local')
+        if @train.local?
+          city_node = @game.hex_by_id(@connection_hexes[0][1]).tile.nodes.find do |n|
+            @game.city_tokened_by?(n, corporation)
+          end
+          return add_single_node_connection(city_node)
+        else
+          @connection_hexes.clear
+        end
+      end
 
       possibilities = @connection_hexes.map do |hex_ids|
         hexes = hex_ids.map { |hex_str| @game.hex_by_id(hex_str.split.first) }

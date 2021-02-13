@@ -10,83 +10,110 @@ class Game < Base
 
   QUERY_LIMIT = 13
 
-  STATUS_QUERY = <<~SQL
-    SELECT %<status>s_games.*
-    FROM (
-      SELECT *
-      FROM games
-      WHERE status = '%<status>s'
-      ORDER BY created_at DESC
-      LIMIT #{QUERY_LIMIT}
-      OFFSET :%<status>s_offset * #{QUERY_LIMIT - 1}
-    ) %<status>s_games
+  USER_GAMES_IDS = <<~SQL
+    SELECT game_id AS id
+    FROM game_users
+    WHERE user_id = :user_id
   SQL
 
-  USER_STATUS_QUERY = <<~SQL
-    SELECT %<status>s_games.*
-    FROM (
-      SELECT g.*
-      FROM games g
-      LEFT JOIN user_games ug
-        ON g.id = ug.id
-      WHERE g.status = '%<status>s'
-        AND ug.id IS NULL
-        AND NOT (g.status = 'new' AND COALESCE((settings->>'unlisted')::boolean, false))
-      ORDER BY g.created_at DESC
-      LIMIT #{QUERY_LIMIT}
-      OFFSET :%<status>s_offset * #{QUERY_LIMIT - 1}
-    ) %<status>s_games
+  FILTERED_GAMES = <<~SQL
+    SELECT *
+    FROM games
+    WHERE tsv @@ to_tsquery(:search_string)
   SQL
 
-  USER_QUERY = <<~SQL
-    WITH user_games AS (
-      select game_id AS id
-      from game_users
-      where user_id = :user_id
-    )
-
-    SELECT personal_games.*
-    FROM (
-      SELECT g.*
-      FROM games g
-      LEFT JOIN user_games ug
-        ON g.id = ug.id
-      WHERE ug.id IS NOT NULL
-        OR g.user_id = :user_id
-      ORDER BY g.id DESC
-      LIMIT 1000
-    ) personal_games
+  LIMIT_OFFSET = <<~SQL
+    LIMIT #{QUERY_LIMIT}
+    OFFSET :page * #{QUERY_LIMIT - 1}
   SQL
 
-  # rubocop:disable Style/FormatString
-  LOGGED_IN_QUERY = <<~SQL
-    #{USER_QUERY}
-    UNION
-    #{USER_STATUS_QUERY % { status: 'new' }}
-    UNION
-    #{USER_STATUS_QUERY % { status: 'active' }}
-    UNION
-    #{USER_STATUS_QUERY % { status: 'finished' }}
+  ALL_GAMES_SEARCH_QUERY = <<~SQL
+    SELECT *
+    FROM (#{FILTERED_GAMES}) filtered_games
+    WHERE status = :status
+      AND NOT COALESCE((settings->>'unlisted')::boolean, false)
+    ORDER BY updated_at DESC
+    #{LIMIT_OFFSET}
   SQL
 
-  LOGGED_OUT_QUERY = <<~SQL
-    #{STATUS_QUERY % { status: 'new' }}
-    UNION
-    #{STATUS_QUERY % { status: 'active' }}
-    UNION
-    #{STATUS_QUERY % { status: 'finished' }}
+  ALL_GAMES_QUERY = <<~SQL
+    SELECT *
+    FROM games
+    WHERE status = :status
+      AND NOT COALESCE((settings->>'unlisted')::boolean, false)
+    ORDER BY updated_at DESC
+    #{LIMIT_OFFSET}
   SQL
-  # rubocop:enable Style/FormatString
+
+  OTHER_GAMES_SEARCH_QUERY = <<~SQL
+    WITH user_games AS (#{USER_GAMES_IDS})
+    , filtered_games AS (#{FILTERED_GAMES})
+    SELECT g.*
+    FROM filtered_games g
+    LEFT JOIN user_games ug
+      ON g.id = ug.id
+    WHERE ug.id IS NULL
+      AND g.status = :status
+      AND NOT COALESCE((settings->>'unlisted')::boolean, false)
+    ORDER BY updated_at DESC
+    #{LIMIT_OFFSET}
+  SQL
+
+  OTHER_GAMES_QUERY = <<~SQL
+    WITH user_games AS (#{USER_GAMES_IDS})
+    SELECT g.*
+    FROM games g
+    LEFT JOIN user_games ug
+      ON g.id = ug.id
+    WHERE ug.id IS NULL
+      AND g.status = :status
+      AND NOT COALESCE((settings->>'unlisted')::boolean, false)
+    ORDER BY updated_at DESC
+    #{LIMIT_OFFSET}
+  SQL
+
+  PERSONAL_GAMES_SEARCH_QUERY = <<~SQL
+    WITH user_games AS (#{USER_GAMES_IDS})
+    , filtered_games AS (#{FILTERED_GAMES})
+    SELECT g.*
+    FROM filtered_games g
+    INNER JOIN user_games ug
+      ON g.id = ug.id
+    WHERE g.status = :status
+    ORDER BY g.acting && '{:user_id}' DESC, g.updated_at DESC
+    #{LIMIT_OFFSET}
+  SQL
+
+  PERSONAL_GAMES_QUERY = <<~SQL
+    WITH user_games AS (#{USER_GAMES_IDS})
+    SELECT g.*
+    FROM games g
+    INNER JOIN user_games ug
+      ON g.id = ug.id
+    WHERE g.status = :status
+    ORDER BY g.acting && '{:user_id}' DESC, g.updated_at DESC
+    #{LIMIT_OFFSET}
+  SQL
 
   def self.home_games(user, **opts)
     opts = {
-      new_offset: opts['new'],
-      active_offset: opts['active'],
-      finished_offset: opts['finished'],
-    }.transform_values { |v| v&.to_i || 0 }
-
+      games: opts['games'] || (user ? 'personal' : 'all'),
+      page: opts['p']&.to_i || 0,
+      status: opts['status'] || 'active',
+      search_string: opts['s'] || nil,
+    }
     opts[:user_id] = user.id if user
-    fetch(user ? LOGGED_IN_QUERY : LOGGED_OUT_QUERY, **opts,).all.sort_by(&:id).reverse
+
+    query =
+      if user && opts[:games] == 'personal'
+        opts[:search_string] ? PERSONAL_GAMES_SEARCH_QUERY : PERSONAL_GAMES_QUERY
+      elsif user
+        opts[:search_string] ? OTHER_GAMES_SEARCH_QUERY : OTHER_GAMES_QUERY
+      else
+        opts[:search_string] ? ALL_GAMES_SEARCH_QUERY : ALL_GAMES_QUERY
+      end
+
+    fetch(query, **opts,).all
   end
 
   SETTINGS = %w[
@@ -102,6 +129,11 @@ class Game < Base
     players
       .sort_by(&:id)
       .shuffle(random: Random.new(settings['seed'] || 1))
+  end
+
+  def archive!
+    Action.where(game: self).delete
+    update(status: 'archived')
   end
 
   def to_h(include_actions: false, player: nil)

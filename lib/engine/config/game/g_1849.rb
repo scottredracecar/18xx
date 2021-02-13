@@ -403,7 +403,7 @@ module Engine
       "upgrade=cost:160,terrain:mountain;path=a:0,b:3,track:narrow": [
         "K9"
       ],
-      "label=P;city=revenue:30;path=a:5,b:_0;path=a:2,b:_0;path=a:3,b:_0": [
+      "label=P;city=revenue:50;path=a:5,b:_0;path=a:2,b:_0;path=a:3,b:_0": [
         "C5"
       ],
       "label=C;city=revenue:40;path=a:1,b:_0": [
@@ -446,7 +446,7 @@ module Engine
       "path=a:1,b:2,track:dual": [
         "B16"
       ],
-      "offboard=revenue:yellow_10|green_30|brown_90;path=a:4,b:_0,track:dual": [
+      "offboard=revenue:white_10|gray_30|black_90;path=a:4,b:_0,track:dual": [
         "C15"
       ],
       "town=revenue:10;path=a:0,b:_0,track:narrow;path=a:1,b:_0;path=a:5,b:_0": [
@@ -462,13 +462,13 @@ module Engine
         "A13",
         "K13"
       ],
-      "border=edge:4,type:impassable;city=revenue:yellow_20|green_30|brown_40;path=a:0,b:_0,track:dual;path=a:5,b:_0,track:dual": [
+      "border=edge:4,type:impassable;city=revenue:white_20|gray_30|black_40;path=a:0,b:_0,track:dual;path=a:5,b:_0,track:dual": [
         "C1"
       ],
-      "city=revenue:yellow_20|green_30|brown_40;path=a:0,b:_0,track:dual;path=a:3,b:_0,track:dual;path=a:4,b:_0,track:dual;path=a:5,b:_0,track:dual": [
+      "city=revenue:white_20|gray_30|black_40;path=a:0,b:_0,track:dual;path=a:3,b:_0,track:dual;path=a:4,b:_0,track:dual;path=a:5,b:_0,track:dual": [
         "E1"
       ],
-      "city=slots:2,revenue:yellow_20|green_30|brown_40;path=a:1,b:_0,track:dual;path=a:2,b:_0;path=a:3,b:_0,track:narrow;path=a:4,b:_0,track:narrow;path=a:5,b:_0": [
+      "city=slots:2,revenue:white_20|gray_30|black_40;path=a:1,b:_0,track:dual;path=a:2,b:_0;path=a:3,b:_0,track:narrow;path=a:4,b:_0,track:narrow;path=a:5,b:_0": [
         "M9"
       ]
     }
@@ -482,7 +482,7 @@ module Engine
       ],
       "operating_rounds": 1,
       "status": [
-        "gray_uses_yellow"
+        "gray_uses_white"
       ]
     },
     {
@@ -495,7 +495,7 @@ module Engine
       ],
       "operating_rounds": 2,
       "status": [
-        "gray_uses_yellow",
+        "gray_uses_white",
         "can_buy_companies"
       ]
     },
@@ -509,7 +509,7 @@ module Engine
       ],
       "operating_rounds": 2,
       "status": [
-        "gray_uses_green",
+        "gray_uses_gray",
         "can_buy_companies"
       ]
     },
@@ -524,7 +524,7 @@ module Engine
       ],
       "operating_rounds": 3,
       "status": [
-        "gray_uses_green",
+        "gray_uses_gray",
         "can_buy_companies"
       ]
     },
@@ -539,7 +539,7 @@ module Engine
       ],
       "operating_rounds": 3,
       "status": [
-        "gray_uses_brown"
+        "gray_uses_black"
       ]
     },
     {
@@ -553,7 +553,7 @@ module Engine
       ],
       "operating_rounds": 3,
       "status": [
-        "gray_uses_brown",
+        "gray_uses_black",
         "blue_zone"
       ]
     }
@@ -574,6 +574,77 @@ module Engine
           ]
         }
       ]
+    },
+    {
+      "name": "Studio di Ingegneria Giuseppe Incorpora",
+      "value": 45,
+      "revenue": 10,
+      "desc": "During its operating turn, the owning corporation can lay or upgrade standard gauge track on mountain, hill or rough hexes at half cost. Narrow gauge track is still at normal cost.",
+      "sym": "SIGI",
+      "abilities": [
+        {
+          "type": "tile_discount",
+          "discount" : "half",
+          "terrain": "mountain",
+          "owner_type": "corporation"
+        }
+      ]
+    },
+    {
+      "name": "Compagnia Navale Mediterranea",
+      "value": 75,
+      "revenue": 15,
+      "desc": "During its operating turn, the owning corporation may close this company to place the +L. 20 token on any port. The corporation that placed the token adds L. 20 to the revenue of the port for the rest of the game.",
+      "sym": "CNM",
+      "abilities": [
+        {
+          "type": "assign_hexes",
+          "when": "owning_corp_or_turn",
+          "hexes": [
+            "A5",
+            "a12",
+            "L14",
+            "N8"
+          ],
+          "count": 1,
+          "owner_type": "corporation"
+        },
+        {
+          "type": "assign_corporation",
+          "when": "sold",
+          "count": 1,
+          "owner_type": "corporation"
+        }
+      ]
+    },
+    {
+      "name": "Società Marittima Siciliana",
+      "value": 110,
+      "revenue": 20,
+      "desc": "During its operating turn, the owning corporation may close this private company in lieu of performing both its tile and token placement steps. Performing this action allows the corporation to select any coastal city hex (all cities except Caltanisetta and Ragusa), optionally lay or upgrade a tile there, and optionally place a station token there. This power may be used even if the corporation is unable to trace a route to that city, but all other normal tile placement and station token placement rules apply.",
+      "sym": "SMS",
+      "abilities": [
+        {
+          "type": "description",
+          "description": "Lay/upgrade and/or teleport on any coastal city"
+        }
+      ]
+    },
+    {
+      "name": "Reale Società d'Affari",
+      "value": 150,
+      "revenue": 25,
+      "desc": "Cannot be bought by a corporation. This private closes when the associated corporation buys its first train. If the associated corporation closes before buying a train, this private remains open until all private companies are closed at the start of Phase 12.",
+      "sym": "RSA",
+      "abilities": [
+        {
+          "type": "shares",
+          "shares": "random_president"
+        },
+        {
+          "type": "no_buy"
+        }
+      ]
     }
   ],
   "corporations": [
@@ -582,6 +653,7 @@ module Engine
       "sym": "AFG",
       "name": "Azienda Ferroviaria Garibaldi",
       "logo": "1849/AFG",
+      "simple_logo": "1849/AFG.alt",
       "token_fee": 40,
       "tokens": [
         0,
@@ -597,6 +669,7 @@ module Engine
       "sym": "ATA",
       "name": "Azienda Trasporti Archimede",
       "logo": "1849/ATA",
+      "simple_logo": "1849/ATA.alt",
       "token_fee": 30,
       "tokens": [
         0,
@@ -613,6 +686,7 @@ module Engine
       "sym": "CTL",
       "name": "Compagnia Trasporti Lilibeo",
       "logo": "1849/CTL",
+      "simple_logo": "1849/CTL.alt",
       "token_fee": 40,
       "tokens": [
         0,
@@ -622,13 +696,15 @@ module Engine
       "shares":[20, 10, 10, 10, 10, 10, 10, 20],
       "coordinates": "E1",
       "always_market_price": true,
-      "color": "goldenrod"
+      "color": "goldenrod",
+      "text_color": "black"
     },
     {
       "float_percent": 20,
       "sym": "IFT",
       "name": "Impresa Ferroviaria Trinacria",
       "logo": "1849/IFT",
+      "simple_logo": "1849/IFT.alt",
       "token_fee": 90,
       "tokens": [
         0,
@@ -645,6 +721,7 @@ module Engine
       "sym": "RCS",
       "name": "Rete Centrale Sicula",
       "logo": "1849/RCS",
+      "simple_logo": "1849/RCS.alt",
       "token_fee": 130,
       "tokens": [
         0,
@@ -661,6 +738,7 @@ module Engine
       "sym": "SFA",
       "name": "Società Ferroviaria Akragas",
       "logo": "1849/SFA",
+      "simple_logo": "1849/SFA.alt",
       "token_fee": 40,
       "tokens": [
         0,
@@ -670,7 +748,8 @@ module Engine
       "shares":[20, 10, 10, 10, 10, 10, 10, 20],
       "coordinates": "J6",
       "always_market_price": true,
-      "color": "pink"
+      "color": "pink",
+      "text_color": "black"
     }
   ],
   "trains": [

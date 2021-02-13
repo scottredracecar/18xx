@@ -77,7 +77,8 @@ module Engine
 
             # Add a new neutral/CN token
             cn_corp = @game.corporation_by_id('CN')
-            token = Engine::Token.new(cn_corp, price: 0, logo: '/logos/1882/neutral.svg', type: :neutral)
+            logo = '/logos/1882/neutral.svg'
+            token = Engine::Token.new(cn_corp, price: 0, logo: logo, simple_logo: logo, type: :neutral)
             cn_corp.tokens << token
 
             action.city.reservations.delete(owner)
@@ -97,7 +98,8 @@ module Engine
             @entity.owner,
             action.city,
             available_tokens(@entity)[0],
-            teleport: ability(@entity).teleport_price,
+            connected: false,
+            extra: true
           )
           @destination = action.city.hex
 
@@ -151,12 +153,10 @@ module Engine
           return unless entity.company?
 
           case @state
-          when nil
-            @game.abilities(entity, :token)
-          when :place_token
+          when nil, :place_token
             @game.abilities(entity, :token)
           when :lay_tile
-            @game.abilities(entity, :tile_lay, time: 'track')
+            @game.abilities(entity, :tile_lay, time: 'special_track')
           end
         end
       end

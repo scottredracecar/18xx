@@ -10,6 +10,9 @@ a {
   color: currentColor;
   text-underline-offset: 0.2em;
 }
+nav a {
+  text-decoration: none;
+}
 
 button, .button_link {
   font-size: 14px;
@@ -23,7 +26,12 @@ button, .button_link {
   cursor: pointer;
   text-decoration: none;
 }
-button.small {
+.button_link {
+  display: inline-block; /* else padding doesn’t work => different height than button */
+  box-sizing: border-box;
+  text-align: center;
+}
+button.small, .button_link.small {
   padding: 0.2rem 0.5rem;
   margin-right: 0.5rem;
 }
@@ -41,11 +49,6 @@ h3 {
   font-size: 1.1rem;
   margin-bottom: 0.4rem;
 }
-
-p {
-  margin: 0.7rem 0;
-}
-
 
 /* prevent hover effects on mobile devices */
 @media(hover: hover) and (pointer: fine) {
@@ -94,6 +97,19 @@ input + label, select + label {
   margin-right: 1rem;
 }
 
+nav ul {
+  margin: 0;
+  padding: 0;
+}
+nav li {
+  float: left;
+  padding: 0 0.5rem;
+  list-style: none;
+}
+
+p {
+  margin: 0.7rem 0;
+}
 p:first-child {
   margin-top: 0;
 }
@@ -118,14 +134,10 @@ th, td {
   button, .button_link, input, select, textarea {
     background-color: gainsboro;
   }
-
-  div.undo {
-    float: left;
-  }
 }
 
 nav#game_menu {
-  padding: 1rem 2vmin 1rem 2vmin;
+  padding: 1rem 2vmin calc(0.9rem + 0.5vmin) 2vmin;
 }
 /* Safari 10.1+ hack, affects most browsers on iOS => more space for scroll bar */
 @media not all and (min-resolution:.001dpcm) { @media {
@@ -160,6 +172,33 @@ nav#game_menu {
   font-weight: bold;
 }
 
+nav .submenu {
+  padding: 0.3rem 0.5rem;
+}
+nav .submenu li {
+  float: none;
+}
+nav .submenu a {
+  display: block;
+  min-width: 5.5rem;
+}
+@media only screen and (max-width: 600px) {
+  #main_nav .menu {
+    display: none;
+  }
+  nav .submenu li {
+    padding: 0.4rem 0;
+  }
+}
+@media only screen and (min-width: 601px) {
+  #main_nav a.toggle {
+    display: none;
+  }
+  nav .submenu li {
+    padding: 0.2rem 0;
+  }
+}
+
 #profile-settings > div {
   margin: 0.2rem 0;
 }
@@ -173,36 +212,18 @@ nav#game_menu {
   height: 1.8rem;
   width: 2.7rem;
 }
-
-#profile-settings > #settings__notifications {
-  height: 2rem;
+#settings__options .input-container {
+  display: block;
 }
-
-#settings__colors .input-container label {
+#settings__colors label, #settings__options label  {
     display: inline-block;
     width: 11.5rem;
 }
-
-#settings__tiles > label {
-  margin-right: 0.5rem;
-}
-#settings__tiles__buttons {
-  display: inline-flex;
-}
-#settings__tiles__buttons > .input-container {
+#settings__tiles .input-container {
   margin: 0;
 }
 #settings__tiles input[type=color] {
   margin: 3px;
-}
-
-.card_header {
-  font-size: 1.2rem;
-  font-weight: bold;
-  margin: 1rem 0;
-}
-.card_header h2, #left h2 {
-  margin: 0;
 }
 
 .back {
@@ -262,6 +283,9 @@ text.number {
 
 .small_font {
   font-size: 90%;
+}
+.xsmall_font {
+  font-size: 80%;
 }
 
 .tile {
@@ -342,7 +366,7 @@ text.number {
 .corp div, .player div {
   display: grid;
 }
-.corp__title div, .corp__holdings div {
+.corp__title *, .corp__holdings * {
   align-self: center;
   justify-self: center;
 }
@@ -353,11 +377,18 @@ table.center {
 
 #chatlog {
   height: 200px;
+  resize: vertical;
 }
 @media only screen and (min-width: 900px) {
   #homepage #chatlog {
     height: 350px;
   }
+}
+.timestamp.hidden {
+  visibility: hidden;
+}
+.chatline:hover > .timestamp.hidden {
+  visibility: visible;
 }
 
 div.game.card em {
@@ -365,16 +396,16 @@ div.game.card em {
   text-decoration: underline;
 }
 
-div.history {
+#history {
   float: left;
 }
 
-div.undo {
+#undo {
   float: right;
 }
 
 @media only screen and (max-width: 420px) {
-  div.undo {
+  #undo {
     float: left;
   }
 }

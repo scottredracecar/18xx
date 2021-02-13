@@ -1,5 +1,6 @@
 # frozen_string_literal: true
 
+require 'game_manager'
 require 'lib/color'
 require 'lib/connection'
 require 'lib/params'
@@ -20,6 +21,7 @@ module View
     needs :user
     needs :connected, default: false, store: true
     needs :before_process_pass, default: -> {}, store: true
+    needs :scroll_pos, default: nil, store: true
 
     def render_broken_game(e)
       inner = [h(:div, "We're sorry this game cannot be continued due to #{e}")]
@@ -108,14 +110,16 @@ module View
         n_id = data['id']
         o_id = game.current_action_id
 
-        if n_id == o_id
+        if n_id == o_id + 1
           game_data['actions'] << data
           store(:game_data, game_data, skip: true)
           store(:game, game.process_action(data))
         else
           store['connection'].get(game_path) do |new_data|
-            store(:game_data, new_data, skip: true)
-            store(:game, game.clone(new_data['actions']))
+            unless new_data['error']
+              store(:game_data, new_data, skip: true)
+              store(:game, game.clone(new_data['actions']))
+            end
           end
         end
       end unless @connected
@@ -147,7 +151,7 @@ module View
     end
 
     def game_path
-      "/game/#{@game_data['id']}"
+      GameManager.url(@game_data)
     end
 
     private
@@ -182,13 +186,15 @@ module View
         style: {
           overflow: 'auto',
           position: 'sticky',
-          margin: '-1rem -2vmin 2vmin -2vmin',
-          borderBottom: "1px solid #{color_for(:font2)}",
+          margin: '0 -2vmin 2vmin -2vmin',
           top: '0',
+          borderBottom: "1px solid #{color_for(:font2)}",
+          borderTop: "1px solid #{color_for(:font2)}",
+          boxShadow: "0 5px 0 0 #{color_for(@game.phase.current[:tiles].last)}, 0 6px 0 0 #{color_for(:bg)}",
           backgroundColor: bg_color,
           color: active_player ? contrast_on(bg_color) : color_for(:font2),
           fontSize: 'large',
-          zIndex: '9999',
+          zIndex: '999',
         },
       }
 
@@ -210,6 +216,11 @@ module View
 
     def item(name, anchor = '')
       change_anchor = lambda do
+        unless route_anchor
+          elm = Native(`document.getElementById('chatlog')`)
+          # only store when scrolled up at least one line (20px)
+          store(:scroll_pos, elm.scrollTop < elm.scrollHeight - elm.offsetHeight - 20 ? elm.scrollTop : nil, skip: true)
+        end
         store(:tile_selector, nil, skip: true)
         store(:app_route, "#{@app_route.split('#').first}#{anchor}")
       end
@@ -222,15 +233,8 @@ module View
         style: { textDecoration: route_anchor == anchor[1..-1] ? 'underline' : 'none' },
         on: { click: change_anchor },
       }
-      li_props = {
-        style: {
-          float: 'left',
-          margin: '0 0.5rem',
-          listStyle: 'none',
-        },
-      }
 
-      h(:li, li_props, [h(:a, a_props, name)])
+      h(:li, [h(:a, a_props, name)])
     end
 
     def route_anchor
@@ -240,6 +244,7 @@ module View
     def render_round
       description = @game_data['mode'] == :hotseat ? '[HOTSEAT] ' : ''
       description += "#{@game.class.title}: "
+      description += "Phase #{@game.phase.name} - "
       name = @round.class.name.split(':').last
       description += @game.round_description(name)
       description += @game.finished ? ' - Game Over' : " - #{@round.description}"
@@ -252,7 +257,16 @@ module View
     def render_action
       return h(Game::GameEnd) if @game.finished
 
+      if current_entity_actions.include?('discard_train') &&
+        current_entity_actions.include?('swap_train')
+        return h(Game::UpgradeOrDiscardTrains)
+      end
       return h(Game::DiscardTrains) if current_entity_actions.include?('discard_train')
+
+      if current_entity_actions.include?('par') &&
+          step.respond_to?(:corporation_pending_par) && step.corporation_pending_par
+        return h(Game::CorporationPendingPar, corporation: step.corporation_pending_par)
+      end
 
       case @round
       when Engine::Round::Stock
@@ -264,6 +278,8 @@ module View
       when Engine::Round::Operating
         if current_entity_actions.include?('merge')
           h(Game::Round::Merger, game: @game)
+        elsif current_entity_actions.include?('buy_shares') && @game.current_entity&.player?
+          h(Game::Round::Stock, game: @game)
         else
           h(Game::Round::Operating, game: @game)
         end
@@ -281,7 +297,7 @@ module View
 
       h('div.game', [
         render_round,
-        h(Game::GameLog, user: @user),
+        h(Game::GameLog, user: @user, scroll_pos: @scroll_pos),
         h(Game::HistoryAndUndo, num_actions: @num_actions),
         h(Game::EntityOrder, round: @round),
         h(Game::Abilities, user: @user, game: @game),
@@ -293,6 +309,10 @@ module View
 
     def current_entity_actions
       @current_entity_actions ||= @game.round.actions_for(@game.round.active_step&.current_entity) || []
+    end
+
+    def step
+      @game.round.active_step
     end
   end
 end

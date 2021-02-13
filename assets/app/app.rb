@@ -9,6 +9,7 @@ require 'view/about'
 require 'view/create_game'
 require 'view/invite_game'
 require 'view/home'
+require 'view/confirm'
 require 'view/flash'
 require 'view/game_page'
 require 'view/map_page'
@@ -23,22 +24,31 @@ class App < Snabberb::Component
   include GameManager
   include UserManager
   needs :pin, default: nil
+  needs :show_games_submenu, default: false, store: true
+  needs :show_main_submenu, default: false, store: true
 
   def render
+    close_submenus = lambda do
+      store(:show_games_submenu, false, skip: true)
+      store(:show_main_submenu, false)
+    end
+
     props = {
       props: { id: 'app' },
       style: {
         backgroundColor: @user&.dig(:settings, :bg) || 'inherit',
         color: @user&.dig(:settings, :font) || 'currentColor',
         minHeight: '98vh',
-        padding: '0.75vmin 2vmin 2vmin 2vmin',
+        padding: '0 2vmin 2vmin 2vmin',
         transition: 'background-color 1s ease',
       },
+      on: { click: close_submenus },
     }
 
     h(:div, props, [
       h(View::Navigation),
       h(View::Flash),
+      h(View::Confirm),
       render_content,
     ])
   end
@@ -46,7 +56,6 @@ class App < Snabberb::Component
   def render_content
     store(:connection, Lib::Connection.new(root), skip: true) unless @connection
 
-    refresh_user
     js_handlers
 
     needs_consent = @user && !@user.dig('settings', 'consent')

@@ -25,9 +25,8 @@ module View
           @step = @game.round.active_step
           @current_actions = @step.current_actions
           @auctioning_corporation = @step.auctioning_corporation if @step.respond_to?(:auctioning_corporation)
-          @mergeable_entity = @step.mergeable_entity if @step.respond_to?(:mergeable_entity)
           @selected_corporation ||= @auctioning_corporation
-
+          @mergeable_entity = @step.mergeable_entity if @step.respond_to?(:mergeable_entity)
           @price_protection = @step.price_protection if @step.respond_to?(:price_protection)
           @selected_corporation ||= @price_protection&.corporation
 
@@ -57,8 +56,8 @@ module View
           end
 
           children.concat(render_buttons)
-          children << h(BuyCompaniesAtFaceValue, game: @game) if @current_actions.include?('buy_company') &&
-            @step.purchasable_unsold_companies.any?
+          children << h(SpecialBuy) if @current_actions.include?('special_buy')
+          children.concat(render_failed_merge) if @current_actions.include?('failed_merge')
           children.concat(render_corporations)
           children.concat(render_mergeable_entities) if @current_actions.include?('merge')
           children.concat(render_player_companies) if @current_actions.include?('sell_company')
@@ -82,16 +81,39 @@ module View
         def render_merge_button
           merge = lambda do
             if @selected_corporation
-              process_action(Engine::Action::Merge.new(
-                @mergeable_entity,
-                corporation: @selected_corporation,
-              ))
+              do_merge = lambda do
+                process_action(Engine::Action::Merge.new(
+                  @mergeable_entity,
+                  corporation: @selected_corporation,
+                ))
+              end
+
+              if @mergeable_entity.owner == @selected_corporation.owner
+                do_merge.call
+              else
+                check_consent(@selected_corporation.owner, do_merge)
+              end
             else
               store(:flash_opts, 'Select a corporation to merge with')
             end
           end
 
           [h(:button, { on: { click: merge } }, @step.merge_action)]
+        end
+
+        def render_failed_merge
+          return [] unless @step.merge_failed?
+
+          failed_merge = lambda do
+            process_action(Engine::Action::Undo.new(@game.current_entity, action_id: @step.action_id_before_merge))
+            process_action(Engine::Action::FailedMerge.new(@game.current_entity,
+                                                           corporations: @step.merging_corporations))
+          end
+
+          text = 'The merger has failed. The President did not have a share to donate to the system.' \
+                 " Press the 'Merge Failed' button to continue. You will not be able to undo to this point afterwards."
+          [h(:div, text),
+           h(:button, { on: { click: failed_merge } }, 'Merge Failed')]
         end
 
         def render_corporations
@@ -101,6 +123,8 @@ module View
               verticalAlign: 'top',
             },
           }
+
+          merging = @step.respond_to?(:merge_in_progress?) && @step.merge_in_progress?
 
           @game.sorted_corporations.reject(&:closed?).map do |corporation|
             next if @auctioning_corporation && @auctioning_corporation != corporation
@@ -113,7 +137,7 @@ module View
             input = render_input(corporation) if @game.corporation_available?(corporation)
             choose = h(Choose) if @current_actions.include?('choose') && @step.choice_available?(corporation)
 
-            children << h(Corporation, corporation: corporation, interactive: input || choose)
+            children << h(Corporation, corporation: corporation, interactive: input || choose || merging)
             children << input if input && @selected_corporation == corporation
             children << choose if choose
 
@@ -128,20 +152,28 @@ module View
             render_buy_tokens(corporation),
           ]
           inputs << h(IssueShares, entity: corporation) if @step.actions(corporation).include?('buy_shares')
+          inputs << h(BuyTrains, corporation: corporation) if @step.actions(corporation).include?('buy_train')
           inputs = inputs.compact
           h('div.margined_bottom', { style: { width: '20rem' } }, inputs) if inputs.any?
         end
 
         def render_pre_ipo(corporation)
+          children = []
+
           type = @step.ipo_type(corporation)
           case type
           when :par
-            return h(Par, corporation: corporation) if @current_actions.include?('par')
+            children << h(Par, corporation: corporation) if @current_actions.include?('par')
           when :bid
-            return h(Bid, entity: @current_entity, corporation: corporation) if @current_actions.include?('bid')
+            children << h(Bid, entity: @current_entity, corporation: corporation) if @current_actions.include?('bid')
           when String
-            return h(:div, type)
+            children << h(:div, type)
           end
+          children << h(BuySellShares, corporation: corporation)
+
+          children.compact!
+          return h(:div, children) unless children.empty?
+
           nil
         end
 
@@ -179,15 +211,8 @@ module View
         end
 
         def render_mergeable_entities
-          step = @game.round.active_step
-          return unless step.current_actions.include?('merge')
-
-          mergeable_entities = @step.mergeable_entities
-          player_corps = mergeable_entities.select do |target|
-            target.owner == @mergeable_entity.owner || @step.show_other_players
-          end
-          @selected_corporation = player_corps.first if player_corps.one?
-          return unless mergeable_entities
+          return unless @step.current_actions.include?('merge')
+          return unless @step.mergeable_entities
 
           children = []
 
@@ -200,7 +225,7 @@ module View
 
           hidden_corps = false
           @show_other_players = true if @step.show_other_players
-          mergeable_entities.each do |target|
+          @step.mergeable_entities.each do |target|
             if @show_other_players || target.owner == @mergeable_entity.owner || !target.owner
               children << h(Corporation, corporation: target, selected_corporation: @selected_corporation)
             else
@@ -272,16 +297,21 @@ module View
 
           @game.companies.select { |c| c.owner == @game.bank }.map do |company|
             children = []
-            children << h(Company, company: company)
-            children << h('div.margined_bottom', { style: { width: '20rem' } },
-                          render_buy_input(company)) if @selected_company == company
+            children << h(Company, company: company,
+                                   bids: (@current_actions.include?('bid') ? @step.bids[company] : nil))
+            if @selected_company == company
+              inputs = []
+              inputs.concat(render_buy_input(company)) if @current_actions.include?('buy_company')
+              inputs.concat(render_bid_input(company)) if @current_actions.include?('bid')
+              children << h('div.margined_bottom', { style: { width: '20rem' } }, inputs)
+            end
             h(:div, props, children)
           end
         end
 
         def render_buy_input(company)
-          return [] unless @current_actions.include?('buy_company')
           return [] unless @step.can_buy_company?(@current_entity, company)
+          return render_buy_input_interval(company) if company.interval
 
           buy = lambda do
             process_action(Engine::Action::BuyCompany.new(
@@ -291,10 +321,45 @@ module View
             ))
             store(:selected_company, nil, skip: true)
           end
-
           [h(:button,
              { on: { click: buy } },
              "Buy #{@selected_company.sym} from Bank for #{@game.format_currency(company.value)}")]
+        end
+
+        def render_buy_input_interval(company)
+          prices = company.interval.sort
+
+          buy_buttons = prices.map do |price|
+            buy = lambda do
+              process_action(Engine::Action::BuyCompany.new(
+                @current_entity,
+                company: company,
+                price: price,
+              ))
+            end
+
+            props = {
+              style: {
+                width: 'calc(17.5rem/6)',
+                padding: '0.2rem',
+              },
+              on: { click: buy },
+            }
+
+            h('button.small.buy_company', props, @game.format_currency(price).to_s)
+          end
+
+          div_class = buy_buttons.size < 5 ? '.inline' : ''
+          [h(:div, [
+            h("div#{div_class}", { style: { marginTop: '0.5rem' } }, "Buy #{@selected_company.sym}: "),
+            *buy_buttons,
+          ])]
+        end
+
+        def render_bid_input(company)
+          return [] unless @step.can_bid?(@current_entity, company)
+
+          [h(Bid, entity: @current_entity, corporation: company)]
         end
       end
     end

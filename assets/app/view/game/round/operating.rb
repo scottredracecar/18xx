@@ -3,6 +3,7 @@
 require 'view/game/buy_companies'
 require 'view/game/special_buy'
 require 'view/game/buy_trains'
+require 'view/game/convert'
 require 'view/game/company'
 require 'view/game/corporation'
 require 'view/game/player'
@@ -10,6 +11,7 @@ require 'view/game/dividend'
 require 'view/game/issue_shares'
 require 'view/game/corporate_buy_shares'
 require 'view/game/map'
+require 'view/game/buy_corporation'
 require 'view/game/route_selector'
 require 'view/game/cash_crisis'
 
@@ -31,7 +33,7 @@ module View
           left << h(SpecialBuy) if @current_actions.include?('special_buy')
           left << h(RouteSelector) if @current_actions.include?('run_routes')
           left << h(Dividend) if @current_actions.include?('dividend')
-
+          left << h(Convert) if @current_actions.include?('convert')
           if @current_actions.include?('buy_train')
             left << h(IssueShares) if @current_actions.include?('sell_shares')
             left << h(BuyTrains)
@@ -47,6 +49,8 @@ module View
             left << h(Choose)
           elsif @current_actions.include?('swap_train')
             left << h(SwapTrain)
+          elsif @current_actions.include?('buy_corporation')
+            left << h(BuyCorporation)
           end
           left << h(Loans, corporation: entity) if (%w[take_loan payoff_loan] & @current_actions).any?
 

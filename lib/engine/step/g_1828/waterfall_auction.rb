@@ -18,11 +18,15 @@ module Engine
           super
         end
 
+        def tiered_auction?
+          true
+        end
+
         protected
 
         def resolve_bids
           if @process_round_end_auction
-            @companies.each do |company|
+            @companies.dup.each do |company|
               resolve_bids_for_company(company)
               break if @auctioning == company
             end

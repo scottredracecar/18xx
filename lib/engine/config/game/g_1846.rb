@@ -81,9 +81,9 @@ module Engine
   "tiles": {
     "5": 3,
     "6": 4,
-    "7": 15,
-    "8": 30,
-    "9": 30,
+    "7": "unlimited",
+    "8": "unlimited",
+    "9": "unlimited",
     "14": 4,
     "15": 5,
     "16": 2,
@@ -217,7 +217,7 @@ module Engine
       "abilities": [
         {
           "type": "close",
-          "when": "never",
+          "on_phase": "never",
           "owner_type": "corporation"
         }
       ]
@@ -279,11 +279,13 @@ module Engine
             "G19"
           ],
           "count_per_or": 1,
+          "when": "or_start",
           "owner_type": "player"
         },
         {
           "type": "assign_corporation",
           "count_per_or": 1,
+          "when": "or_start",
           "owner_type": "player"
         },
         {
@@ -584,6 +586,8 @@ module Engine
             "type":"tile_lay",
             "free":true,
             "description": "Free tile lay: E5, F6, G5, H6, J4",
+            "passive": true,
+            "when": "track_and_token",
             "hexes":[
                "E5",
                "F6",

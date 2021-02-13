@@ -9,14 +9,11 @@ module Engine
       include EmergencyMoney
       def can_buy_train?(entity = nil, _shell = nil)
         entity ||= current_entity
-        can_buy_normal?(entity)
-      end
 
-      def can_buy_normal?(entity)
         can_buy_normal = room?(entity) &&
           buying_power(entity) >= @depot.min_price(entity)
 
-        can_buy_normal || (discountable_trains_allowed?(entity) && @depot
+        can_buy_normal || (discountable_trains_allowed?(entity) && @game
           .discountable_trains_for(entity)
           .any? { |_, _, _, price| buying_power(entity) >= price })
       end
@@ -26,7 +23,7 @@ module Engine
           entity.trains
         else
           entity.trains.reject(&:obsolete)
-        end.size < @game.phase.train_limit(entity)
+        end.size < @game.train_limit(entity)
       end
 
       def must_buy_train?(entity)
@@ -57,8 +54,9 @@ module Engine
         remaining = price - buying_power(entity)
         if remaining.positive? && president_may_contribute?(entity, action.shell)
           cheapest = @depot.min_depot_train
-          raise GameError, "Cannot purchase #{train.name} train: #{cheapest.name} train available" if
-            train != cheapest &&
+          cheapest_name = name_of_cheapest_variant(cheapest)
+          raise GameError, "Cannot purchase #{train.name} train: #{cheapest_name} train available" if
+            train.name != cheapest_name &&
             @game.class::EBUY_DEPOT_TRAIN_MUST_BE_CHEAPEST &&
             (!@game.class::EBUY_OTHER_VALUE || train.from_depot?)
 
@@ -66,11 +64,14 @@ module Engine
           raise GameError, 'Cannot buy for more than cost' if price > train.price
           raise GameError, 'Cannot contribute funds when affordable trains exist' if cheapest.price <= entity.cash
 
+          try_take_player_loan(entity.owner, remaining)
+
           player = entity.owner
           player.spend(remaining, entity)
           @log << "#{player.name} contributes #{@game.format_currency(remaining)}"
         end
 
+        try_take_loan(entity, price)
         @game.queue_log! { @game.phase.buying_train!(entity, train) }
 
         if exchange
@@ -87,7 +88,6 @@ module Engine
 
         @game.flush_log!
 
-        try_take_loan(entity, price)
         @game.buy_train(entity, train, price)
         pass! unless can_buy_train?(entity)
       end
@@ -196,6 +196,10 @@ module Engine
       def face_value_ability?(entity)
         @game.abilities(entity, :train_buy) { |ability| return ability.face_value }
         false
+      end
+
+      def name_of_cheapest_variant(train)
+        train.variants.min_by { |_, v| v[:price] }.first
       end
     end
   end

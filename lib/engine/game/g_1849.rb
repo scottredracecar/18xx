@@ -21,7 +21,7 @@ module Engine
       load_from_json(Config::Game::G1849::JSON)
       AXES = { x: :number, y: :letter }.freeze
 
-      DEV_STAGE = :prealpha
+      DEV_STAGE = :beta
 
       GAME_LOCATION = 'Sicily'
       GAME_RULES_URL = 'https://boardgamegeek.com/filepage/206628/1849-rules'
@@ -33,7 +33,7 @@ module Engine
 
       BANKRUPTCY_ALLOWED = true
 
-      CLOSED_CORP_RESERVATIONS = :remain
+      CLOSED_CORP_RESERVATIONS_REMOVED = false
 
       EBUY_OTHER_VALUE = false
       HOME_TOKEN_TIMING = :float
@@ -50,6 +50,10 @@ module Engine
         phase_limited: :blue,
       }.freeze
 
+      ASSIGNMENT_TOKENS = {
+        'CNM': '/icons/1849/cnm_token.svg',
+      }.freeze
+
       EVENTS_TEXT = Base::EVENTS_TEXT.merge(
         'green_par': ['144 Par Available',
                       'Corporations may now par at 144 (in addition to 67 and 100)'],
@@ -62,9 +66,9 @@ module Engine
 
       STATUS_TEXT = Base::STATUS_TEXT.merge(
         'blue_zone': ['Blue Zone Available', 'Corporation share prices can enter the blue zone'],
-        'gray_uses_yellow': ['Yellow Revenues', 'Gray locations use yellow revenue values'],
-        'gray_uses_green': ['Green Revenues', 'Gray locations use green revenue values'],
-        'gray_uses_brown': ['Brown Revenues', 'Gray locations use brown revenue values']
+        'gray_uses_white': ['White Revenues', 'Gray locations use white revenue values'],
+        'gray_uses_gray': ['Gray Revenues', 'Gray locations use gray revenue values'],
+        'gray_uses_black': ['Black Revenues', 'Gray locations use black revenue values']
       ).freeze
 
       GRAY_REVENUE_CENTERS =
@@ -109,11 +113,20 @@ module Engine
 
       AFG_HEXES = %w[C1 H8 M9 M11 B14].freeze
       PORT_HEXES = %w[a12 A5 L14 N8].freeze
+      SMS_HEXES = %w[B14 C1 C5 H12 J6 M9 M13].freeze
 
-      attr_accessor :swap_choice_player, :swap_other_player, :swap_corporation,
+      attr_accessor :swap_choice_player, :swap_location, :swap_other_player, :swap_corporation,
                     :loan_choice_player, :player_debts,
                     :max_value_reached,
-                    :old_operating_order
+                    :old_operating_order, :moved_this_turn
+
+      def ipo_name(_entity = nil)
+        'Treasury'
+      end
+
+      def sms_hexes
+        SMS_HEXES
+      end
 
       def game_ending_description
         _, after = game_end_check
@@ -142,21 +155,37 @@ module Engine
 
       def setup
         @corporations.sort_by! { rand }
+        setup_companies
+        afg # init afg helper
         remove_corp if @players.size == 3
-        @corporations.each do |c|
-          c.slot_open = true
-          c.next_to_par = false
-          c.shares.last.last_cert = true
-        end
         @corporations[0].next_to_par = true
 
         @player_debts = Hash.new { |h, k| h[k] = 0 }
+        @moved_this_turn = []
+      end
+
+      def setup_companies
+        # RSA to close on train buy
+        rsa = company_by_id('RSA')
+        rsa_share = rsa.all_abilities[0].shares.first
+        rsa.add_ability(Ability::Close.new(
+          type: :close,
+          when: 'bought_train',
+          corporation: rsa_share.corporation.name,
+        ))
+
+        # RSA corp to be first
+        index = @corporations.index { |corp| corp.id == rsa_share.corporation.id }
+        @corporations[0], @corporations[index] = @corporations[index], @corporations[0]
+
+        # min_price == 1
+        companies.each { |c| c.min_price = 1 }
       end
 
       def remove_corp
         removed = @corporations.pop
         @log << "Removed #{removed.name}"
-        return if removed.name == 'AFG'
+        return if removed == afg
 
         hex_by_id(removed.coordinates).tile.city_towns.first.remove_reservation!(removed)
         @log << "Removed token reservation at #{removed.coordinates}"
@@ -183,10 +212,11 @@ module Engine
         index = @corporations.index(corporation)
 
         @corporations[index + 1].next_to_par = true unless @corporations.last == corporation
+        place_home_token(corporation) if @round.stock?
       end
 
       def home_token_locations(corporation)
-        raise NotImplementedError unless corporation.name == 'AFG'
+        raise NotImplementedError unless corporation == afg
 
         AFG_HEXES.map { |coord| hex_by_id(coord) }.select do |hex|
           hex.tile.cities.any? { |city| city.tokenable?(corporation, free: true) }
@@ -222,7 +252,6 @@ module Engine
       end
 
       def update_garibaldi
-        afg = @corporations.find { |c| c.name == 'AFG' }
         return unless afg && !afg.slot_open && !home_token_locations(afg).empty?
 
         afg.slot_open = true
@@ -230,13 +259,26 @@ module Engine
         @log << 'AFG now has a token spot available and can be opened in the next stock round.'
       end
 
+      def remove_rsa(corporation)
+        rsa = company_by_id('RSA')
+        ability = rsa.all_abilities.find { |abil| abil.type == :shares }
+        return unless ability && ability.shares.first.corporation == corporation
+
+        rsa.remove_ability(ability)
+      end
+
       def close_corporation(corporation, quiet: false)
+        remove_rsa(corporation)
         super
+        corporation.close!
         corporation = reset_corporation(corporation)
-        corporation.shares.last.last_cert = true
+        @afg = corporation if corporation.id == 'AFG'
+        hex_by_id(corporation.coordinates).tile.add_reservation!(corporation, 0) unless corporation == afg
         @corporations << corporation
         corporation.closed_recently = true
         index = @corporations.index(corporation)
+
+        # let this corp skip AFG in line if AFG is blocked from opening
         unless @corporations[index - 1].slot_open
           @corporations[index - 1].next_to_par = false
           @corporations[index - 1], @corporations[index] = @corporations[index], @corporations[index - 1]
@@ -255,10 +297,14 @@ module Engine
         super
       end
 
+      def afg
+        @afg ||= @corporations.find { |corp| corp.id == 'AFG' }
+      end
+
       def stock_round
-        Round::Stock.new(self, [
+        Round::G1849::Stock.new(self, [
           Step::DiscardTrain,
-          Step::HomeToken,
+          Step::G1849::HomeToken,
           Step::G1849::SwapChoice,
           Step::G1849::BuySellParShares,
         ])
@@ -269,8 +315,9 @@ module Engine
           Step::G1849::LoanChoice,
           Step::G1849::Bankrupt,
           Step::G1849::SwapChoice,
-          Step::SpecialTrack,
           Step::BuyCompany,
+          Step::G1849::SMSTeleport,
+          Step::G1849::Assign,
           Step::G1849::Track,
           Step::G1849::Token,
           Step::Route,
@@ -280,6 +327,11 @@ module Engine
           Step::G1849::IssueShares,
           [Step::BuyCompany, blocks: true],
         ], round_num: round_num)
+      end
+
+      def next_round!
+        super
+        @corporations.each { |c| c.sms_hexes = nil }
       end
 
       def track_type(paths)
@@ -321,12 +373,21 @@ module Engine
       end
 
       def revenue_for(route, stops)
-        stops.sum { |stop| stop_revenue(stop, route.phase, route.train) }
+        total = stops.sum { |stop| stop_revenue(stop, route.phase, route.train) }
+        total + cnm_bonus(route.corporation, stops)
+      end
+
+      def cnm_bonus(corp, stops)
+        corp.assigned?('CNM') && stops.map(&:hex).find { |hex| hex.assigned?('CNM') } ? 20 : 0
       end
 
       def stop_revenue(stop, phase, train)
-        return stop.route_revenue(phase, train) unless GRAY_REVENUE_CENTERS.keys.include?(stop.hex.id)
+        return gray_revenue(stop) if GRAY_REVENUE_CENTERS.keys.include?(stop.hex.id)
 
+        stop.route_revenue(phase, train)
+      end
+
+      def gray_revenue(stop)
         GRAY_REVENUE_CENTERS[stop.hex.id][@phase.name]
       end
 
@@ -335,6 +396,8 @@ module Engine
       end
 
       def reorder_corps
+        just_moved = @moved_this_turn.uniq
+        @moved_this_turn = []
         same_spot =
           @corporations
             .select(&:floated?)
@@ -343,18 +406,18 @@ module Engine
         return if same_spot.empty?
 
         same_spot.each do |sp, corps|
-          current_order = corps.sort.map(&:name)
-          reordered = corps.sort_by { |c| @old_operating_order.index(c) }
-          new_order = reordered.map(&:name)
+          current_order = corps.sort
+          moved, unmoved = current_order.partition { |c| just_moved.include?(c) }
+          moved_ordered = moved.sort_by { |c| old_operating_order.index(c) }
+          new_order = unmoved + moved_ordered
           next if current_order == new_order
 
-          @log << 'Updating operating order for corporations
+          @log << 'Updating operating order for sold (and moved) corporations now
                     on same share value space to maintain relative order before sales.'
-          @log << "#{current_order} --> #{new_order}"
+          @log << "#{current_order.map(&:name)} --> #{new_order.map(&:name)}"
           sp.corporations.clear
-          sp.corporations.concat(reordered)
+          sp.corporations.concat(new_order)
         end
-        @old_operating_order = nil
       end
 
       def issuable_shares(entity)
@@ -383,7 +446,9 @@ module Engine
         owner_after_percent = owner_percent - bundle.percent
 
         if other_percent == 20 && would_be_pres.certs_of(bundle.corporation).one?
-          return false unless owner_after_percent.zero?
+          return true if owner_after_percent.zero?
+
+          owner_percent > 20 && owner_after_percent == 10
         end
 
         owner_after_percent < 20 && other_percent > owner_after_percent
@@ -432,7 +497,7 @@ module Engine
         last_cert = bundle.shares.find(&:last_cert)
         return true unless last_cert
 
-        location = last_cert.corporation.shares.include?(last_cert) ? last_cert.corporation.shares : share_pool.shares
+        location = bundle.owner.share_pool? ? share_pool.shares_of(bundle.corporation) : bundle.corporation.ipo_shares
         location.size == bundle.shares.size
       end
 
@@ -453,6 +518,8 @@ module Engine
       end
 
       def legal_tile_rotation?(corp, hex, tile)
+        return true if corp.sms_hexes
+
         connection_directions = graph.connected_hexes(corp).find { |k, _| k.id == hex.id }[1]
         ever_not_nil = false # to permit teleports and SFA/AFG initial tile lay
         connection_directions.each do |dir|
@@ -463,7 +530,7 @@ module Engine
           neighboring_path = neighboring_tile.paths.find { |p| p.exits.include?(Engine::Hex.invert(dir)) }
           if neighboring_path
             ever_not_nil = true
-            return true if connecting_path.tracks_match(neighboring_path, dual_ok: true)
+            return true if connecting_path.tracks_match?(neighboring_path, dual_ok: true)
           end
         end
         !ever_not_nil
@@ -496,13 +563,13 @@ module Engine
       end
 
       def event_green_par!
-        @log << "-- Event: #{EVENTS_TEXT['green_par'][1]} --"
+        @log << "-- Event: #{EVENTS_TEXT[:green_par][1]} --"
         stock_market.enable_par_price(144)
         update_cache(:share_prices)
       end
 
       def event_brown_par!
-        @log << "-- Event: #{EVENTS_TEXT['brown_par'][1]} --"
+        @log << "-- Event: #{EVENTS_TEXT[:brown_par][1]} --"
         stock_market.enable_par_price(216)
         update_cache(:share_prices)
       end
@@ -514,11 +581,10 @@ module Engine
         city = messina.tile.cities[0]
 
         # If Garibaldi's only token removed, close Garibaldi
-        if (garibaldi = @corporations.find { |c| c.name == 'AFG' })
-          if city.tokened_by?(garibaldi) && garibaldi.placed_tokens.one?
-            @log << '-- AFG loses only token, closing. --'
-            close_corporation(garibaldi)
-          end
+        if afg && city.tokened_by?(afg) && afg.placed_tokens.one?
+          @log << '-- AFG loses only token, closing. --'
+          @round.force_next_entity! if @round.current_entity == afg
+          close_corporation(afg)
         end
 
         # Remove from game tokens on Messina

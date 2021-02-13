@@ -28,7 +28,7 @@ module View
             player_corps = mergeable_entities.select do |target|
               target.owner == merge_entity.owner || @step.show_other_players
             end
-            @selected_corporation = player_corps.first if player_corps.one?
+            @selected_corporation = player_corps.first if player_corps.one? && !@selected_corporation
           end
 
           children = []
@@ -71,6 +71,7 @@ module View
           elsif merge_entity
             children << h(:div, props, [h(Corporation, corporation: merge_entity, selectable: false)])
           end
+          children << h(Player, game: @game, player: entity.owner) if entity.owner.player?
 
           if mergeable_entities
             props = {
@@ -157,10 +158,22 @@ module View
         def render_merge(corporation)
           merge = lambda do
             if @selected_corporation
-              process_action(Engine::Action::Merge.new(
-                corporation,
-                corporation: @selected_corporation,
-              ))
+              merge_corporation = @selected_corporation
+              do_merge = lambda do
+                process_action(Engine::Action::Merge.new(
+                  corporation,
+                  corporation: merge_corporation,
+                ))
+              end
+
+              if @step.show_other_players ||
+                !merge_corporation.owner ||
+                merge_corporation.owner == corporation.owner
+                do_merge.call
+              else
+                check_consent(merge_corporation.owner, do_merge)
+              end
+
             else
               store(:flash_opts, 'Select a corporation to merge with')
             end

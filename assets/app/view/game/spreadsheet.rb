@@ -37,21 +37,26 @@ module View
         ].compact)
 
         children << top_line
+        children << @game.token_note if @game.respond_to?(:token_note)
         children << render_table
         children << render_spreadsheet_controls
 
-        h('div#spreadsheet', { style: {
-          overflow: 'auto',
-        } }, children.compact)
+        h('div#spreadsheet', {
+            style: {
+              overflow: 'auto',
+            },
+          }, children.compact)
       end
 
       def render_table
-        h(:table, { style: {
-          margin: '1rem 0 1.5rem 0',
-          borderCollapse: 'collapse',
-          textAlign: 'center',
-          whiteSpace: 'nowrap',
-        } }, [
+        h(:table, {
+            style: {
+              margin: '1rem 0 1.5rem 0',
+              borderCollapse: 'collapse',
+              textAlign: 'center',
+              whiteSpace: 'nowrap',
+            },
+          }, [
           h(:thead, render_title),
           h(:tbody, render_corporations),
           h(:thead, [
@@ -136,8 +141,7 @@ module View
               if hist[x]&.dividend&.id&.positive?
                 link_h = history_link(hist[x].revenue.abs.to_s,
                                       "Go to run #{x} of #{corporation.name}",
-                                      hist[x].dividend.id - 1,
-                                      color: 'currentColor')
+                                      hist[x].dividend.id - 1)
                 h(:td, props, [link_h])
               else
                 h(:td, props, hist[x].revenue.abs.to_s)
@@ -170,7 +174,12 @@ module View
         }
 
         extra = []
-        extra << h(:th, 'Loans') if @game.total_loans&.nonzero?
+        extra << h(:th, render_sort_link('Loans', :loans)) if @game.total_loans&.nonzero?
+        extra << h(:th, render_sort_link('Shorts', :shorts)) if @game.respond_to?(:available_shorts)
+        if @game.total_loans.positive?
+          extra << h(:th, render_sort_link('Buying Power', :buying_power))
+          extra << h(:th, render_sort_link('Interest Due', :interest))
+        end
         [
           h(:tr, [
             h(:th, ''),
@@ -192,10 +201,10 @@ module View
             h(:th, render_sort_link('Market', :share_price)),
             h(:th, render_sort_link('Cash', :cash)),
             h(:th, render_sort_link('Order', :order)),
-            h(:th, 'Trains'),
-            h(:th, 'Tokens'),
+            h(:th, render_sort_link('Trains', :trains)),
+            h(:th, render_sort_link('Tokens', :tokens)),
             *extra,
-            h(:th, 'Companies'),
+            h(:th, render_sort_link('Companies', :companies)),
             h(:th, ''),
             *or_history_titles,
           ]),
@@ -252,10 +261,15 @@ module View
       end
 
       def sorted_corporations
-        floated_corporations = @game.round.entities
+        operating_corporations =
+          if @game.round.operating?
+            @game.round.entities
+          else
+            @game.operating_order
+          end
 
         result = @game.all_corporations.map do |c|
-          operating_order = (floated_corporations.find_index(c) || -1) + 1
+          operating_order = (operating_corporations.find_index(c) || -1) + 1
           [operating_order, c]
         end
 
@@ -271,6 +285,20 @@ module View
             corporation.par_price&.price || 0
           when :share_price
             corporation.share_price&.price || 0
+          when :loans
+            corporation.loans.size
+          when :short
+            @game.available_shorts(corporation)
+          when :buying_power
+            @game.buying_power(corporation, full: true)
+          when :interest
+            @game.interest_owed(corporation)
+          when :trains
+            corporation.floated? ? corporation.trains.size : -1
+          when :tokens
+            @game.count_available_tokens(corporation)
+          when :companies
+            corporation.companies.size
           else
             @game.player_by_id(@spreadsheet_sort_by)&.num_shares_of(corporation)
           end
@@ -289,7 +317,7 @@ module View
               background: corporation.color,
               color: corporation.text_color,
             },
-        }
+          }
 
         tr_props = zebra_props(index.odd?)
         market_props = { style: { borderRight: border_style } }
@@ -306,6 +334,20 @@ module View
 
         extra = []
         extra << h(:td, "#{corporation.loans.size}/#{@game.maximum_loans(corporation)}") if @game.total_loans&.nonzero?
+        if @game.respond_to?(:available_shorts)
+          taken, total = @game.available_shorts(corporation)
+          extra << h(:td, "#{taken} / #{total}")
+        end
+        if @game.total_loans.positive?
+          extra << h(:td, @game.format_currency(@game.buying_power(corporation, full: true)))
+          interest_props = { style: {} }
+          unless @game.can_pay_interest?(corporation)
+            color = StockMarket::COLOR_MAP[:yellow]
+            interest_props[:style][:backgroundColor] = color
+            interest_props[:style][:color] = contrast_on(color)
+          end
+          extra << h(:td, interest_props, @game.format_currency(@game.interest_owed(corporation)).to_s)
+        end
 
         h(:tr, tr_props, [
           h(:th, name_props, corporation.name),
@@ -328,7 +370,7 @@ module View
           h('td.padded_number', @game.format_currency(corporation.cash)),
           h('td.left', order_props, operating_order_text),
           h(:td, corporation.trains.map(&:name).join(', ')),
-          h(:td, "#{corporation.tokens.map { |t| t.used ? 0 : 1 }.sum}/#{corporation.tokens.size}"),
+          h(:td, @game.token_string(corporation)),
           *extra,
           render_companies(corporation),
           h(:th, name_props, corporation.name),
@@ -381,7 +423,7 @@ module View
         cert_limit = @game.cert_limit
         props = { style: { color: 'red' } }
         h(:tr, zebra_props(true), [
-          h('th.left', "Certs/#{cert_limit}"),
+          h('th.left', 'Certs' + (@game.show_game_cert_limit? ? "/#{cert_limit}" : '')),
           *@game.players.map { |player| render_player_cert_count(player, cert_limit, props) },
         ])
       end

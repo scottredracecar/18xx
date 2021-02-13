@@ -9,6 +9,7 @@ module View
       include Lib::Settings
 
       needs :game
+      needs :user, default: nil, store: true
       needs :show_bank, default: false
       needs :explain_colors, default: false
 
@@ -73,7 +74,15 @@ module View
 
       def cell_style(box_style, types)
         color = @game.class::STOCKMARKET_COLORS[types&.first]
-        style = box_style.merge(backgroundColor: color ? COLOR_MAP[color] : color_for(:bg2))
+        color_to_use = color ? COLOR_MAP[color] : color_for(:bg2)
+
+        style = if types.include?(:par_overlap) && types.size > 1
+                  box_style.merge(background: "repeating-linear-gradient(45deg, #{color_to_use}, #{color_to_use} 10px,
+                    #{COLOR_MAP[:blue]} 10px, #{COLOR_MAP[:blue]} 20px)")
+                else
+                  box_style.merge(backgroundColor: color_to_use)
+                end
+
         if types.include?(:convert_range)
           # This only works on 1D at present
 
@@ -126,7 +135,10 @@ module View
         row = @game.stock_market.market.first.map do |price|
           tokens = price.corporations.map do |corporation|
             props = {
-              attrs: { src: corporation.logo, width: "#{TOKEN_SIZES[@game.corporation_size(corporation)]}px" },
+              attrs: {
+                src: logo_for_user(corporation),
+                width: "#{TOKEN_SIZES[@game.corporation_size(corporation)]}px",
+              },
               style: { marginTop: "#{VERTICAL_TOKEN_PAD}px" },
             }
             h(:img, props)
@@ -162,7 +174,10 @@ module View
         @game.stock_market.market.first.each_with_index do |price, idx|
           tokens = price.corporations.map do |corporation|
             props = {
-              attrs: { src: corporation.logo, width: "#{TOKEN_SIZES[@game.corporation_size(corporation)]}px" },
+              attrs: {
+                src: logo_for_user(corporation),
+                width: "#{TOKEN_SIZES[@game.corporation_size(corporation)]}px",
+              },
               style: { marginTop: "#{VERTICAL_TOKEN_PAD}px" },
             }
             h(:img, props)
@@ -195,7 +210,7 @@ module View
 
               tokens = corporations.map.with_index do |corporation, index|
                 props = {
-                  attrs: { src: corporation.logo, width: "#{TOKEN_SIZE}px" },
+                  attrs: { src: logo_for_user(corporation), width: "#{TOKEN_SIZE}px" },
                   style: {
                     position: 'absolute',
                     left: num > 1 ? "#{LEFT_TOKEN_POS + ((num - index - 1) * spacing)}px" : "#{MID_TOKEN_POS}px",
@@ -216,6 +231,10 @@ module View
 
           h(:div, { style: { width: 'max-content' } }, row)
         end
+      end
+
+      def logo_for_user(entity)
+        @user&.dig('settings', 'simple_logos') ? entity.simple_logo : entity.logo
       end
 
       def render
@@ -255,7 +274,7 @@ module View
           },
         }
 
-        children << h(:div, props, [h(Bank, game: @game)])
+        children << h(:div, props, [h(Bank, game: @game)].compact)
         children.concat(grid)
 
         if @explain_colors
@@ -288,6 +307,50 @@ module View
               h(:div, text),
             ])
           end
+        end
+
+        if @game.respond_to?(:price_movement_chart)
+          header, *chart = @game.price_movement_chart
+
+          props = {
+            style: {
+              border: '1px solid',
+            },
+          }
+
+          rows = chart.map do |r|
+            h(:tr, props, [
+              h('td.right', props, r[0]),
+              h(:td, props, r[1]),
+            ])
+          end
+
+          table_props = {
+            style: {
+              margin: '0.5rem 0 0.5rem 0',
+              textAlign: 'left',
+              border: '1px solid',
+              borderColor: color_for(:font),
+              borderCollapse: 'collapse',
+            },
+          }
+
+          header_props = {
+            style: {
+              backgroundColor: color_for(:bg2),
+              border: '1px solid',
+            },
+          }
+
+          children << h(:table, table_props, [
+            h(:thead, [
+              h(:tr, props, [
+                h('th.no_padding', header_props, header[0]),
+                h(:th, header_props, header[1]),
+              ]),
+            ]),
+            h(:tbody, rows),
+          ])
         end
 
         props = {

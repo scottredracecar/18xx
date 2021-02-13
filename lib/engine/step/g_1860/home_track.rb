@@ -23,9 +23,11 @@ module Engine
         end
 
         def round_state
-          {
-            pending_tracks: [],
-          }
+          super.merge(
+            {
+              pending_tracks: [],
+            }
+          )
         end
 
         def active?
@@ -74,10 +76,6 @@ module Engine
 
         def available_hex(_entity, hex)
           pending_track[:hexes].include?(hex)
-        end
-
-        def hex_neighbors(entity, hex)
-          @game.graph.connected_hexes(entity)[hex]
         end
       end
     end

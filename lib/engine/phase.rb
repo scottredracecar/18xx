@@ -4,6 +4,7 @@ require_relative 'action/buy_train'
 
 module Engine
   class Phase
+    attr_accessor :next_on
     attr_reader :name, :operating_rounds, :tiles, :phases, :status, :corporation_sizes
 
     def initialize(phases, game)
@@ -23,8 +24,7 @@ module Engine
       end
       train.events.clear
 
-      rust_trains!(train, entity)
-      close_companies_on_train!(entity)
+      @game.rust_trains!(train, entity)
       @depot.depot_trains(clear: true)
     end
 
@@ -32,17 +32,16 @@ module Engine
       @phases[@index]
     end
 
-    def train_limit(entity)
-      limit = train_limit_constant(entity)
-      return limit if limit.positive?
+    def upcoming
+      @phases[@index + 1]
+    end
 
-      limit =
-        if @train_limit.is_a?(Hash)
-          @train_limit[entity.type] || 0
-        else
-          @train_limit
-        end
-      limit + train_limit_increase(entity)
+    def train_limit(entity)
+      if @train_limit.is_a?(Hash)
+        @train_limit[entity.type] || 0
+      else
+        @train_limit
+      end
     end
 
     def available?(phase_name)
@@ -63,10 +62,12 @@ module Engine
       @corporation_sizes = phase[:corporation_sizes]
       @next_on = Array(@phases[@index + 1]&.dig(:on))
 
-      @log << "-- Phase #{@name} " \
-        "(Operating Rounds: #{@operating_rounds}, Train Limit: #{@train_limit}, "\
-        "Available Tiles: #{@tiles.map(&:capitalize).join(', ')} "\
-        ') --'
+      log_msg =  "-- Phase #{@name} ("
+      log_msg += "Operating Rounds: #{@operating_rounds} | " if @operating_rounds
+      log_msg += "Train Limit: #{train_limit_to_s(@train_limit)}"
+      log_msg += " | Available Tiles: #{@tiles.map(&:capitalize).join(', ')}"
+      log_msg += ') --'
+      @log << log_msg
       trigger_events!
     end
 
@@ -74,11 +75,11 @@ module Engine
       @game.companies.each do |company|
         next unless company.owner
 
-        @game.abilities(company, :revenue_change, time: @name) do |ability|
+        @game.abilities(company, :revenue_change, on_phase: @name) do |ability|
           company.revenue = ability.revenue
         end
 
-        @game.abilities(company, :close, time: @name) do
+        @game.abilities(company, :close, on_phase: @name) do
           @log << "Company #{company.name} closes"
           company.close!
         end
@@ -87,63 +88,15 @@ module Engine
       (@game.companies + @game.corporations).each { |c| c.remove_ability_when(@name) }
     end
 
-    def close_companies_on_train!(entity)
-      @game.companies.each do |company|
-        next if company.closed?
-
-        @game.abilities(company, :close, time: :train) do |ability|
-          next if entity&.name != ability.corporation
-
-          company.close!
-          @log << "#{company.name} closes"
-        end
-      end
-    end
-
-    def rust_trains!(train, entity)
-      obsolete_trains = []
-      rusted_trains = []
-      owners = Hash.new(0)
-
-      @game.trains.each do |t|
-        next if t.obsolete || t.obsolete_on != train.sym
-
-        obsolete_trains << t.name
-        t.obsolete = true
-      end
-
-      @game.trains.each do |t|
-        next if t.rusted
-
-        should_rust = t.rusts_on == train.sym || (t.obsolete_on == train.sym && @depot.discarded.include?(t))
-        next unless should_rust
-        next unless @game.rust?(t)
-
-        rusted_trains << t.name
-        owners[t.owner.name] += 1
-        entity.rusted_self = true if entity && entity == t.owner
-        @game.rust(t)
-      end
-
-      @log << "-- Event: #{obsolete_trains.uniq.join(', ')} trains are obsolete --" if obsolete_trains.any?
-      @log << "-- Event: #{rusted_trains.uniq.join(', ')} trains rust " \
-        "( #{owners.map { |c, t| "#{c} x#{t}" }.join(', ')}) --" if rusted_trains.any?
-    end
-
     def next!
       @index += 1
       setup_phase!
     end
 
-    private
+    def train_limit_to_s(train_limit)
+      return train_limit unless train_limit.is_a?(Hash)
 
-    def train_limit_increase(entity)
-      Array(@game.abilities(entity, :train_limit)).sum(&:increase)
-    end
-
-    def train_limit_constant(entity)
-      @game.abilities(entity, :train_limit) { |ability| return ability.constant if ability.constant }
-      0
+      train_limit.map { |type, limit| "#{type} => #{limit}" }.join(',')
     end
   end
 end

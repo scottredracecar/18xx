@@ -133,10 +133,13 @@ module Engine
           target = action.corporation
           initiator = action.entity.owner
           # PAR price is average of lowest and highest priced
-          # rounded down between 100-200
+          # rounded down between 100-200 in either convert or par_3 areas
           min = @merging.map { |c| c.share_price.price }.min
           max = @merging.map { |c| c.share_price.price }.max
-          merged_par = @game.find_share_price([200, [100, (max + min)].max].min)
+          new_price = [200, [100, (max + min)].max].min
+          merged_par = @game.stock_market.share_prices_with_types(%i[convert_range par_2]).find do |sp|
+            sp.price <= new_price
+          end
 
           # Players who owned shares are eligable to buy shares unlike merger
           owners = @merging.map(&:owner)
@@ -153,6 +156,8 @@ module Engine
           @round.entities[@round.entity_index] = target
 
           @merge_major = false
+          # Set that this has been ipoed so presidentless corps can have shares be bought
+          target.ipoed = true
 
           # Transfer assets starting with the initiator
           @merging.sort_by { |m| players.index(m.owner) }.each do |corporation|
@@ -170,6 +175,7 @@ module Engine
               @game.share_pool.buy_shares(owner, share.to_bundle, exchange: :free)
             end
 
+            remove_duplicate_tokens(target, @merging)
             move_tokens(corporation, target)
 
             receiving = move_assets(corporation, target)
@@ -178,7 +184,6 @@ module Engine
             @round.entities.delete(corporation)
           end
 
-          remove_duplicate_tokens(target, @merging)
           if tokens_above_limits?(target, @merging)
             @game.log << "#{target.name} will be above token limit and must decide which tokens to remove"
             @round.corporations_removing_tokens = [target] + @merging
@@ -192,7 +197,9 @@ module Engine
             end
 
             tokens = target.tokens.map { |t| t.city&.hex&.id }
-            @log << "#{target.name} has tokens (#{target.tokens.size}: hexes #{tokens.compact}) after merger"
+            charter_tokens = tokens.size - tokens.compact.size
+            @log << "#{target.name} has tokens (#{tokens.size}: #{tokens.compact.size} on hexes #{tokens.compact}"\
+            "#{charter_tokens.positive? ? " & #{charter_tokens} on the charter" : ''})"
           end
 
           # Deleting the entity changes turn order, restore it.

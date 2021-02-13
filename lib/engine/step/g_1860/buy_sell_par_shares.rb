@@ -2,7 +2,7 @@
 
 require_relative '../base'
 require_relative '../share_buying'
-require_relative '../../action/buy_company.rb'
+require_relative '../../action/buy_company'
 require_relative '../../action/buy_shares'
 require_relative '../../action/par'
 
@@ -40,10 +40,6 @@ module Engine
         end
 
         def purchasable_companies(_entity)
-          []
-        end
-
-        def purchasable_unsold_companies
           []
         end
 

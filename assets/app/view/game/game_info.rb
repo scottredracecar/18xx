@@ -4,6 +4,7 @@ require 'lib/color'
 require 'lib/settings'
 require 'lib/publisher'
 require 'lib/text'
+require 'view/game/game_meta'
 
 module View
   module Game
@@ -32,7 +33,7 @@ module View
         children.concat(discarded_trains) if @depot.discarded.any?
         children.concat(phases)
         children.concat(timeline) if timeline
-        children.concat(game_info)
+        children << h(GameMeta, game: @game)
       end
 
       def timeline
@@ -42,40 +43,6 @@ module View
 
         @game.timeline.each do |line|
           children << h(:p, line)
-        end
-
-        children
-      end
-
-      def game_info
-        children = [h(:h3, 'Game Info')]
-
-        if (publisher = @game.class::GAME_PUBLISHER)
-          children << h(:p, [
-              'Published by ',
-              *Lib::Publisher.link_list(component: self, publishers: Array(publisher)),
-            ])
-        end
-        children << h(:p, "Designed by #{@game.class::GAME_DESIGNER}") if @game.class::GAME_DESIGNER
-        children << h(:p, "Implemented by #{@game.class::GAME_IMPLEMENTER}") if @game.class::GAME_IMPLEMENTER
-        if @game.class::GAME_RULES_URL.is_a?(Hash)
-          @game.class::GAME_RULES_URL.each do |desc, url|
-            children << h(:p, [h(:a, { attrs: { href: url, target: '_blank' } }, desc)])
-          end
-        else
-          children << h(:p, [h(:a, { attrs: { href: @game.class::GAME_RULES_URL, target: '_blank' } }, 'Rules')])
-        end
-        if @game.optional_rules.any?
-          children << h(:h3, 'Optional Rules Used')
-          @game.class::OPTIONAL_RULES.each do |o_r|
-            next unless @game.optional_rules.include?(o_r[:sym])
-
-            children << h(:p, " * #{o_r[:short_name]}: #{o_r[:desc]}")
-          end
-        end
-
-        if @game.class::GAME_INFO_URL
-          children << h(:p, [h(:a, { attrs: { href: @game.class::GAME_INFO_URL, target: '_blank' } }, 'More info')])
         end
 
         children
@@ -108,11 +75,11 @@ module View
           extra << h(:td, phase[:corporation_sizes].join(', ')) if corporation_sizes
 
           train_limit = phase[:train_limit]
-          train_limit = train_limit.map { |type, limit| "#{type} => #{limit}" }.join(',') if train_limit.is_a?(Hash)
+          train_limit = @game.phase.train_limit_to_s(train_limit)
 
           h(:tr, [
             h(:td, (current_phase == phase ? '→ ' : '') + phase[:name]),
-            h(:td, Array(phase[:on]).first),
+            h(:td, @game.info_on_trains(phase)),
             h(:td, phase[:operating_rounds]),
             h(:td, train_limit),
             h(:td, phase_props, phase_color.capitalize),

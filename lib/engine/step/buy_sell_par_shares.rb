@@ -2,7 +2,8 @@
 
 require_relative 'base'
 require_relative 'share_buying'
-require_relative '../action/buy_company.rb'
+require_relative 'programmer'
+require_relative '../action/buy_company'
 require_relative '../action/buy_shares'
 require_relative '../action/par'
 
@@ -10,6 +11,7 @@ module Engine
   module Step
     class BuySellParShares < Base
       include ShareBuying
+      include Programmer
 
       PURCHASE_ACTIONS = [Action::BuyCompany, Action::BuyShares, Action::Par].freeze
 
@@ -80,12 +82,15 @@ module Engine
         return unless bundle&.buyable
 
         corporation = bundle.corporation
-        entity.cash >= bundle.price && can_gain?(entity, bundle) &&
+        entity.cash >= bundle.price &&
           !@round.players_sold[entity][corporation] &&
-          (can_buy_multiple?(entity, corporation) || !bought?)
+          (can_buy_multiple?(entity, corporation) || !bought?) &&
+          can_gain?(entity, bundle)
       end
 
       def must_sell?(entity)
+        return false if @game.can_hold_above_limit?(entity)
+
         @game.num_certs(entity) > @game.cert_limit ||
           !@game.corporations.all? { |corp| corp.holding_ok?(entity) }
       end
@@ -95,19 +100,7 @@ module Engine
 
         corporation = bundle.corporation
 
-        timing =
-          case @game.class::SELL_AFTER
-          when :first
-            @game.turn > 1
-          when :operate
-            corporation.operated?
-          when :p_any_operate
-            corporation.operated? || corporation.president?(entity)
-          when :any_time
-            true
-          else
-            raise NotImplementedError
-          end
+        timing = @game.check_sale_timing(entity, corporation)
 
         timing &&
           !(@game.class::MUST_SELL_IN_BLOCKS && @round.players_sold[entity][corporation] == :now) &&
@@ -182,12 +175,33 @@ module Engine
         end
       end
 
+      def can_buy_shares?(entity, shares)
+        min_share = nil
+
+        shares.each do |share|
+          next unless share.buyable
+
+          min_share = share if !min_share || share.percent < min_share.percent
+        end
+
+        can_buy?(entity, min_share&.to_bundle)
+      end
+
       def can_buy_any_from_market?(entity)
-        @game.share_pool.shares.any? { |s| can_buy?(entity, s.to_bundle) }
+        @game.share_pool.shares.group_by(&:corporation).each do |_, shares|
+          return true if can_buy_shares?(entity, shares)
+        end
+
+        false
       end
 
       def can_buy_any_from_ipo?(entity)
-        @game.corporations.any? { |c| c.ipoed && can_buy?(entity, c.shares.first&.to_bundle) }
+        @game.corporations.each do |corporation|
+          next unless corporation.ipoed
+          return true if can_buy_shares?(entity, corporation.shares)
+        end
+
+        false
       end
 
       def can_buy_any?(entity)
@@ -213,10 +227,6 @@ module Engine
         @game.purchasable_companies(entity)
       end
 
-      def purchasable_unsold_companies
-        @game.companies.reject(&:owner).reject(&:closed?)
-      end
-
       def get_par_prices(entity, _corp)
         @game
           .stock_market
@@ -225,7 +235,7 @@ module Engine
       end
 
       def sell_shares(entity, shares, swap: nil)
-        raise GameError "Cannot sell shares of #{shares.corporation.name}" if !can_sell?(entity, shares) && !swap
+        raise GameError, "Cannot sell shares of #{shares.corporation.name}" if !can_sell?(entity, shares) && !swap
 
         @round.players_sold[shares.owner][shares.corporation] = :now
         @game.sell_shares_and_change_price(shares, swap: swap)
@@ -236,7 +246,7 @@ module Engine
       end
 
       def sold?
-        @current_actions.any? { |x| x.class == Action::SellShares }
+        @current_actions.any? { |x| x.instance_of?(Action::SellShares) }
       end
 
       def process_buy_company(action)
@@ -245,7 +255,7 @@ module Engine
         price = action.price
         owner = company.owner
 
-        raise GameError "Cannot buy #{company.name} from #{owner.name}" if owner&.corporation?
+        raise GameError, "Cannot buy #{company.name} from #{owner.name}" if owner&.corporation?
 
         company.owner = entity
         owner&.companies&.delete(company)
@@ -255,6 +265,26 @@ module Engine
         @current_actions << action
         @log << "#{owner ? '-- ' : ''}#{entity.name} buys #{company.name} from "\
                 "#{owner ? owner.name : 'the market'} for #{@game.format_currency(price)}"
+      end
+
+      def auto_actions(entity)
+        programmed_auto_actions(entity)
+      end
+
+      def activate_program_buy_shares(entity, program)
+        # TODO: non-ipo? non-10% shares
+        corporation = program.corporation
+        # check if end condition met
+        if program.until_condition == 'float'
+          return [Action::ProgramDisable.new(entity, reason: "#{corporation.name} is floated")] if corporation.floated?
+          # TODO: until n shares
+        end
+        share = corporation.ipo_shares.first
+        if can_buy?(entity, share.to_bundle)
+          [Action::BuyShares.new(entity, shares: share)]
+        else
+          [Action::ProgramDisable.new(entity, reason: "Cannot buy #{corporation.name}")]
+        end
       end
     end
   end

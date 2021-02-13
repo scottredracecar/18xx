@@ -65,7 +65,7 @@ module View
         end
         @hexes.compact!
 
-        children = [render_map, render_controls]
+        children = [render_map, h(MapZoom, map_zoom: map_zoom)]
 
         if current_entity && @tile_selector
           left = (@tile_selector.x + map_x) * @scale
@@ -116,11 +116,11 @@ module View
 
           # Move the position to the middle of the hex
           props = {
-           style: {
-             position: 'absolute',
-             left: "#{left}px",
-             top: "#{top}px",
-           },
+            style: {
+              position: 'absolute',
+              left: "#{left}px",
+              top: "#{top}px",
+            },
           }
           # This needs to be before the map, so that the relative positioning works
           children.unshift(h(:div, props, [selector]))
@@ -134,7 +134,7 @@ module View
           },
         }
 
-        h(:div, props, children)
+        h(:div, [h(:div, props, children), render_controls])
       end
 
       def map_x
@@ -156,7 +156,7 @@ module View
       end
 
       def render_controls
-        h(MapControls, show_location_names: show_location_names, show_coords: show_coords, map_zoom: map_zoom)
+        h(MapControls, show_location_names: show_location_names, show_coords: show_coords)
       end
 
       def render_map

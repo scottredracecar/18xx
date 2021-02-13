@@ -145,7 +145,7 @@ module Engine
       "275",
       "300",
       "325",
-      "350e",
+      "350",
       "375e",
       "400e"
     ],
@@ -314,21 +314,27 @@ module Engine
       "name": "Göta kanalbolag",
       "value": 40,
       "revenue": 10,
-      "desc": "Owning corporation may add +50/30/20 to train runs in hex E8, C8 and C16 in three different ORs",
+      "desc": "Owning corporation may add a hex bonus to each train visit to any of the hexes E8, C8 and C16 in three different ORs. Each train can receive the bonus multiple times. The bonus are 50kr the first time this ability is used, 30kr the second and 20kr the third and last time. Using this ability will not close the prive.",
       "sym": "GKB",
       "abilities": [
         {
-          "type": "base",
-          "count": 3,
-          "owner_type": "corporation"
-        }
-      ]
+        "type": "hex_bonus",
+        "owner_type": "corporation",
+        "hexes": [
+          "C8",
+          "C16",
+          "E8"
+        ],
+        "count": 3,
+        "amount": 50,
+        "when": "route"
+      }]
     },
     {
       "name": "Sveabolaget",
       "value": 45,
       "revenue": 15,
-      "desc": "May lay or shift port token in Halmstad (A6), Ystad(C2), Göteborg (D5), Sundsvall (F19), Umeå (F23), and Luleå (G26).  Add 30 kr/symbol to all routes run to this location by owning company.",
+      "desc": "May lay or shift port token in Halmstad (A6), Ystad(C2), Kalmar (D5), Sundsvall (F19), Umeå (F23), and Luleå (G26).  Add 30 kr/symbol to all routes run to this location by owning company.",
       "sym": "SB",
       "abilities": [
         {
@@ -373,7 +379,7 @@ module Engine
             "8",
             "9"
           ],
-          "when": "track",
+          "when": ["track", "owning_corp_or_turn"],
           "count": 2
         },
         {
@@ -401,14 +407,13 @@ module Engine
       "name": "Motala Verkstad",
       "value": 90,
       "revenue": 15,
-      "desc": "Owning corporation may buy trains at any one time during operating rounds. For 18xx.games this means that owning corporation can buy trains before Run Routes.",
+      "desc": "Owning corporation may do a premature buy of one or more trains, just before Run Routes. These trains can be run even if they have run earlier in the OR. If ability is used the owning corporation cannot buy any trains later in the same OR.",
       "sym": "MV",
       "abilities": [
         {
            "type": "train_buy",
-           "description": "Buy train any time during its OR",
-           "owner_type": "corporation",
-           "count": 1
+           "description": "Buy trains before instead of after Run Routes",
+           "owner_type": "corporation"
         }
       ]
     },
@@ -430,7 +435,7 @@ module Engine
           ],
           "count": 1,
           "closed_when_used_up": false,
-          "when": "train"
+          "when": "buying_train"
         }
      ]
     },
@@ -445,7 +450,7 @@ module Engine
       "name": "Nils Ericson",
       "value": 220,
       "revenue": 25,
-      "desc": "Receive president's share in a corporation randomly determined before auction. Buying player may once during the game take the priority deal at the beginning of one stock round. Cannot be bought by any corporation. Closes when the connected corporation buys its first train. The priority deal overtake remains until it is used, even if this company is closed.",
+      "desc": "Receive president's share in a corporation randomly determined before auction. Buying player may once during the game take the priority deal at the beginning of one stock round (and this ability is not lost even if this private is closed). Cannot be bought by any corporation. Closes when the connected corporation buys its first train.",
       "sym": "NE",
       "abilities": [
         {
@@ -454,6 +459,23 @@ module Engine
         },
         {
            "type":"no_buy"
+        }
+      ]
+    },
+    {
+      "name": "Nils Ericson Första Tjing",
+      "value": 0,
+      "revenue": 0,
+      "desc": "This represents the ability to once during the game take over the priority deal at the beginning of a stock round. Cannot be bought by any corporation. This 'company' remains through the whole game, or until the ability is used.",
+      "sym": "NEFT",
+      "abilities": [
+        {
+           "type":"no_buy"
+        },
+        {
+          "type": "close",
+          "on_phase": "never",
+          "owner_type": "player"
         }
       ]
     },
@@ -470,7 +492,7 @@ module Engine
         },
         {
            "type":"close",
-           "when":"train",
+           "when":"bought_train",
            "corporation":"ÖKJ"
         },
         {

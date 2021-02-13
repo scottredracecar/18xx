@@ -1,11 +1,15 @@
 # frozen_string_literal: true
 
+require 'lib/color'
+require 'lib/settings'
 require 'view/game/actionable'
 
 module View
   module Game
     class Dividend < Snabberb::Component
       include Actionable
+      include Lib::Color
+      include Lib::Settings
 
       needs :routes, store: true, default: []
 
@@ -13,6 +17,8 @@ module View
         @step = @game.active_step
 
         entity = @step.current_entity
+        return render_variable(entity) if @step.dividend_types.include?(:variable)
+
         options = @step.dividend_options(entity)
 
         store(:routes, @step.routes, skip: true)
@@ -42,7 +48,7 @@ module View
               moves.map do |times, dir|
                 times.times { new_share = @game.stock_market.find_relative_share_price(new_share, dir) }
 
-                "#{times} #{dir}"
+                @step.respond_to?(:movement_str) ? @step.movement_str(times, dir) : "#{times} #{dir}"
               end.join(', ')
             else
               'None'
@@ -128,6 +134,80 @@ module View
 
       def cleanup
         store(:routes, [], skip: true)
+      end
+
+      def render_variable(entity)
+        max = (@step.variable_max(entity) / entity.total_shares).to_i
+
+        input = h(:input,
+                  style: {
+                    margin: '1rem 0px',
+                    marginRight: '1rem',
+                  },
+                  props: {
+                    value: max,
+                    min: 0,
+                    max: max,
+                    type: 'number',
+                    size: max.to_s.size,
+                  })
+
+        h(:div,
+          [
+            dividend_chart,
+            @step.help_str(max),
+            input,
+            h(:button, { on: { click: -> { create_dividend(input) } } }, 'Pay Dividend'),
+        ])
+      end
+
+      def create_dividend(input)
+        amount = input.JS['elm'].JS['value'].to_i * @step.current_entity.total_shares
+        process_action(Engine::Action::Dividend.new(@step.current_entity, kind: 'variable', amount: amount))
+      end
+
+      def dividend_chart
+        header, *chart = @step.chart
+
+        props = {
+          style: {
+            border: '1px solid',
+          },
+        }
+
+        rows = chart.map do |r|
+          h(:tr, props, [
+            h('td.right', props, r[0]),
+            h(:td, props, r[1]),
+          ])
+        end
+
+        table_props = {
+          style: {
+            margin: '0.5rem 0 0.5rem 0',
+            textAlign: 'left',
+            border: '1px solid',
+            borderColor: color_for(:font),
+            borderCollapse: 'collapse',
+          },
+        }
+
+        header_props = {
+          style: {
+            backgroundColor: color_for(:bg2),
+            border: '1px solid',
+          },
+        }
+
+        h(:table, table_props, [
+          h(:thead, [
+            h(:tr, props, [
+              h('th.no_padding', header_props, header[0]),
+              h(:th, header_props, header[1]),
+            ]),
+          ]),
+          h(:tbody, rows),
+        ])
       end
     end
   end

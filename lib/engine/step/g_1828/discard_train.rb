@@ -7,9 +7,11 @@ module Engine
     module G1828
       class DiscardTrain < DiscardTrain
         def round_state
-          state = super || {}
-          state[:ignore_train_limit] = false
-          state
+          super.merge(
+            {
+              ignore_train_limit: false,
+            }
+          )
         end
 
         def crowded_corps
@@ -20,14 +22,14 @@ module Engine
 
         def crowded_systems
           @game.corporations.select do |c|
-            c.system? && c.shells.any? { |shell| shell.trains.size > @game.phase.train_limit(c) }
+            c.system? && c.shells.any? { |shell| shell.trains.size > @game.train_limit(c) }
           end
         end
 
         def trains(corporation)
           return super unless corporation.system?
 
-          corporation.shells.find { |s| s.trains.size > @game.phase.train_limit(corporation) }.trains
+          corporation.shells.find { |s| s.trains.size > @game.train_limit(corporation) }.trains
         end
       end
     end

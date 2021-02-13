@@ -1,6 +1,6 @@
 # frozen_string_literal: true
 
-require_relative '../buy_sell_par_shares.rb'
+require_relative '../buy_sell_par_shares'
 
 module Engine
   module Step
@@ -20,6 +20,18 @@ module Engine
           companies = super
 
           companies.select(&:owner)
+        end
+
+        def can_buy_any_from_ipo?(entity)
+          @game.corporations.each do |corporation|
+            next unless corporation.ipoed
+
+            corporation.shares.group_by(&:corporation).each do |_, shares|
+              return true if can_buy_shares?(entity, shares)
+            end
+          end
+
+          false
         end
 
         def can_buy?(entity, bundle)

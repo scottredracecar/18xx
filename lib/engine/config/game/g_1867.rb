@@ -291,6 +291,7 @@ module Engine
       "sym": "CNR",
       "name": "Canadian Northern Railway",
       "logo": "1867/CNR",
+      "simple_logo": "1867/CNR.alt",
       "float_percent": 20,
       "always_market_price": true,
       "tokens": [
@@ -305,6 +306,7 @@ module Engine
       "sym": "CPR",
       "name": "Canadian Pacific Railway",
       "logo": "1867/CPR",
+      "simple_logo": "1867/CPR.alt",
       "float_percent": 20,
       "always_market_price": true,
       "tokens": [
@@ -319,6 +321,7 @@ module Engine
       "sym": "C&O",
       "name": "Chesapeake and Ohio Railway",
       "logo": "1867/CO",
+      "simple_logo": "1867/CO.alt",
       "float_percent": 20,
       "always_market_price": true,
       "tokens": [
@@ -333,6 +336,7 @@ module Engine
       "sym": "GTR",
       "name": "Grand Trunk Railway",
       "logo": "1867/GTR",
+      "simple_logo": "1867/GTR.alt",
       "float_percent": 20,
       "always_market_price": true,
       "tokens": [
@@ -347,6 +351,7 @@ module Engine
       "sym": "GWR",
       "name": "Great Western Railway",
       "logo": "1867/GWR",
+      "simple_logo": "1867/GWR.alt",
       "float_percent": 20,
       "always_market_price": true,
       "tokens": [
@@ -361,6 +366,7 @@ module Engine
       "sym": "ICR",
       "name": "Intercolonial Railway",
       "logo": "1867/ICR",
+      "simple_logo": "1867/ICR.alt",
       "float_percent": 20,
       "always_market_price": true,
       "tokens": [
@@ -375,6 +381,7 @@ module Engine
       "sym": "NTR",
       "name": "National Transcontinental Railway",
       "logo": "1867/NTR",
+      "simple_logo": "1867/NTR.alt",
       "float_percent": 20,
       "always_market_price": true,
       "tokens": [
@@ -389,6 +396,7 @@ module Engine
       "sym": "NYC",
       "name": "New York Central Railroad",
       "logo": "1867/NYC",
+      "simple_logo": "1867/NYC.alt",
       "float_percent": 20,
       "always_market_price": true,
       "tokens": [
@@ -637,7 +645,10 @@ module Engine
         0,
         0
       ],
-      "color": "white"
+      "shares": [100],
+      "hide_shares": true,
+      "type": "national",
+      "color": "red"
     }
   ],
   "trains": [
@@ -940,9 +951,11 @@ module Engine
         "E13",
         "E15",
         "C17",
-        "G15",
         "I15",
         "N12"
+      ],
+      "city=revenue:0;stub=edge:1": [
+        "G15"
       ],
       "city=revenue:0;label=Y": [
         "E17",
@@ -952,7 +965,7 @@ module Engine
       "city=revenue:0;label=Y;label=O;upgrade=cost:20,terrain:water": [
         "J12"
       ],
-      "town=revenue:0;border=edge:5,type:water,cost:80": [
+      "town=revenue:0;border=edge:5,type:water,cost:80;stub=edge:0": [
         "L10"
       ],
       "town=revenue:0;border=edge:0,type:impassable": [
@@ -962,8 +975,10 @@ module Engine
         "C15",
         "B18",
         "H10",
-        "K13",
         "M13"
+      ],
+      "town=revenue:0;stub=edge:4": [
+        "K13"
       ]
     },
     "gray": {
@@ -1061,7 +1076,8 @@ module Engine
         "green"
       ],
       "status":[
-        "can_buy_companies"
+        "can_buy_companies",
+        "export_train"
       ],
       "on": "4",
       "operating_rounds": 2
@@ -1078,7 +1094,8 @@ module Engine
         "brown"
       ],
       "status":[
-        "can_buy_companies"
+        "can_buy_companies",
+        "export_train"
       ],
       "on": "5",
       "operating_rounds": 2
@@ -1095,7 +1112,8 @@ module Engine
         "brown"
       ],
       "on": "6",
-      "operating_rounds": 2
+      "operating_rounds": 2,
+      "status":["export_train"]
     },
     {
       "name": "7",
@@ -1110,7 +1128,8 @@ module Engine
         "gray"
       ],
       "on": "7",
-      "operating_rounds": 2
+      "operating_rounds": 2,
+      "status":["export_train"]
     },
     {
       "name": "8",

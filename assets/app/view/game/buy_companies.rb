@@ -2,6 +2,7 @@
 
 require 'view/game/actionable'
 require 'view/game/company'
+require 'view/game/buy_value_input'
 
 module View
   module Game
@@ -20,6 +21,12 @@ module View
         ].compact)
       end
 
+      def owned_by_other_player?(player, company)
+        return false unless company&.owner # Bank owned, not a player
+
+        player != company&.owner
+      end
+
       def render_companies
         hidden_companies = false
         props = {
@@ -30,11 +37,11 @@ module View
         }
 
         companies = @game.purchasable_companies.sort_by do |company|
-          [company.owner == @corporation.owner ? 0 : 1, company.value]
+          [!owned_by_other_player?(@corporation.owner, company) ? 0 : 1, company.value]
         end
 
         companies_to_buy = companies.map do |company|
-          if company.owner != @corporation.owner && !@show_other_players
+          if owned_by_other_player?(@corporation.owner, company) && !@show_other_players
             hidden_companies = true
             next
           end
@@ -64,35 +71,16 @@ module View
       end
 
       def render_input
-        input = h(:input, style: { marginRight: '1rem' }, props: {
-          value: @selected_company.max_price,
-          type: 'number',
-          min: @selected_company.min_price,
-          max: @selected_company.max_price,
-          size: @corporation.cash.to_s.size,
-        })
+        max_price = max_purchase_price(@corporation, @selected_company)
 
-        buy = lambda do
-          price = input.JS['elm'].JS['value'].to_i
-          process_action(Engine::Action::BuyCompany.new(
-            @corporation,
-            company: @selected_company,
-            price: price,
-          ))
-          store(:selected_company, nil, skip: true)
-        end
+        h(BuyValueInput, value: max_price, min_value: @selected_company.min_price,
+                         max_value: max_price,
+                         size: @corporation.cash.to_s.size,
+                         selected_entity: @selected_company)
+      end
 
-        props = {
-          style: {
-            textAlign: 'center',
-            margin: '1rem',
-          },
-        }
-
-        h(:div, props, [
-          input,
-          h(:button, { on: { click: buy } }, 'Buy'),
-        ])
+      def max_purchase_price(corporation, company)
+        [company.max_price, corporation.cash].min
       end
     end
   end

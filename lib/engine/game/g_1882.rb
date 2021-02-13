@@ -120,7 +120,7 @@ module Engine
         cp = @companies.find { |company| company.name == 'Canadian Pacific' }
         cp.add_ability(Ability::Close.new(
           type: :close,
-          when: :train,
+          when: 'bought_train',
           corporation: abilities(cp, :shares).shares.first.corporation.name,
         ))
       end
@@ -131,8 +131,7 @@ module Engine
 
           next unless ability.from.include?(:par)
 
-          corporation = corporation_by_id(ability.corporation)
-          corporation.par_via_exchange = company
+          exchange_corporations(ability).first.par_via_exchange = company
           @sc_company = company
         end
         super
@@ -152,9 +151,10 @@ module Engine
 
         # CN's tokens use a neutral logo, but as layed become owned by cn but don't block other players
         cn_corp = corporations.find { |x| x.name == 'CN' }
+        logo = '/logos/1882/neutral.svg'
         corporations.each do |x|
           unless CORPORATIONS_WITHOUT_NEUTRAL.include?(x.name)
-            x.tokens << Token.new(cn_corp, price: 0, logo: '/logos/1882/neutral.svg', type: :neutral)
+            x.tokens << Token.new(cn_corp, price: 0, logo: logo, simple_logo: logo, type: :neutral)
           end
         end
         corporations
@@ -203,6 +203,21 @@ module Engine
         @log << 'Saskatchewan Central can no longer be converted to a public corporation'
         @corporations.reject! { |c| c.id == 'SC' }
         @sc_company = nil
+      end
+
+      def count_available_tokens(corporation)
+        corporation.tokens.map { |t| t.used || t.corporation != corporation ? 0 : 1 }.sum
+      end
+
+      def token_string(corporation)
+        # All neutral tokens belong to CN, so it will count them normally.
+        "#{count_available_tokens(corporation)}"\
+        "/#{corporation.tokens.map { |t| t.corporation != corporation ? 0 : 1 }.sum}"\
+        "#{', N' if corporation.tokens.any? { |t| t.corporation != corporation }}"
+      end
+
+      def token_note
+        'Note: N in Tokens column represents a neutral token.'
       end
     end
   end

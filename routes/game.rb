@@ -1,7 +1,5 @@
 # frozen_string_literal: true
 
-require_relative '../lib/engine'
-
 class Api
   hash_routes :api do |hr|
     hr.on 'game' do |r|
@@ -50,14 +48,15 @@ class Api
 
           # POST '/api/game/<game_id>/action'
           r.is 'action' do
+            halt(400, 'Archived games cannot be changed.') if game.status == 'archived'
+
             acting, action = nil
 
             DB.with_advisory_lock(:action_lock, game.id) do
               if game.settings['pin']
                 action_id = r.params['id']
-                action = r.params
-                action.delete('_client_id')
-                meta = action.delete('meta')
+                action = r.params.clone
+                meta = action['meta']
                 halt(400, 'Game missing metadata') unless meta
                 halt(400, 'Game out of sync') unless actions_h(game).size + 1 == action_id
 
@@ -65,8 +64,6 @@ class Api
                   game: game,
                   user: user,
                   action_id: action_id,
-                  turn: meta['turn'],
-                  round: meta['round'],
                   action: action,
                 )
 
@@ -94,8 +91,6 @@ class Api
                   game: game,
                   user: user,
                   action_id: action['id'],
-                  turn: engine.turn,
-                  round: engine.round.name,
                   action: action,
                 )
 
@@ -115,18 +110,9 @@ class Api
                 ['Your Turn', acting.map(&:id), false]
               end
 
-            if user_ids.any?
-              MessageBus.publish(
-                '/turn',
-                user_ids: user_ids,
-                game_id: game.id,
-                game_url: "#{r.base_url}/game/#{game.id}",
-                type: type,
-                force: force,
-              )
-            end
-
+            publish_turn(user_ids, game, r.base_url, type, force) unless user_ids.empty?
             publish("/game/#{game.id}", **action)
+
             game.to_h
           end
 
@@ -146,7 +132,9 @@ class Api
               halt(400, 'Player count not supported')
             end
 
-            set_game_state(game, engine, users)
+            acting = set_game_state(game, engine, users)
+            publish_turn(acting.map(&:id), game, r.base_url, 'Your turn', false)
+
             game.to_h
           end
 
@@ -159,7 +147,11 @@ class Api
       end
 
       r.get do
-        { games: Game.home_games(user, **r.params).map(&:to_h) }
+        games_h = Game.home_games(user, **r.params).map(&:to_h)
+      rescue Sequel::DatabaseError => e
+        e.message.match(/^PG::SyntaxError/) ? halt(400, 'Syntax error in your search query') : halt(500, e.message)
+      else
+        { games: games_h }
       end
 
       # POST '/api/game[/*]'
@@ -213,5 +205,18 @@ class Api
 
     game.save
     acting
+  end
+
+  def publish_turn(user_ids, game, url, type, force)
+    game_id = game.id
+
+    MessageBus.publish(
+      '/turn',
+      user_ids: user_ids,
+      game_id: game_id,
+      game_url: "#{url}/game/#{game_id}",
+      type: type,
+      force: force,
+    )
   end
 end

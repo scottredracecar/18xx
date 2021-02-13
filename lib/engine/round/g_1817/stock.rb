@@ -17,7 +17,7 @@ module Engine
 
           # This is done here, as the tokens need to be checked before closing the train station
           train_station = @game.company_by_id(@game.class::TRAIN_STATION_PRIVATE_NAME)
-          train_station.close! if train_station.owner&.corporation?
+          train_station.close! if train_station&.owner&.corporation?
         end
 
         def tokens_needed?(corporation)
@@ -26,7 +26,7 @@ module Engine
 
         def sold_out_stock_movement(corp)
           @game.stock_market.move_up(corp)
-          @game.stock_market.move_up(corp) if @game.option_short_squeeze?
+          @game.stock_market.move_up(corp) if @game.option_short_squeeze? && corp.player_share_holders.values.sum > 100
         end
 
         def sold_out?(corporation)

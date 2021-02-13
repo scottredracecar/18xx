@@ -38,12 +38,16 @@ module Engine
       ).freeze
 
       OPTIONAL_RULES = [
-        { sym: :or_11,
+        {
+          sym: :or_11,
           short_name: '11 ORs',
-          desc: 'There is an extra, final, OR, directly after OR 10' },
-        { sym: :allow_buy_rusting,
+          desc: 'There is an extra, final, OR, directly after OR 10',
+        },
+        {
+          sym: :allow_buy_rusting,
           short_name: 'Allow buy rusting',
-          desc: 'A corporation is allowed to buy trains that are to be rusted, even if they have already run this OR' },
+          desc: 'A corporation is allowed to buy trains that are to be rusted, even if they have already run this OR',
+        },
       ].freeze
 
       HEXES_FOR_GRAY_TILE = %w[C9 E11].freeze
@@ -215,7 +219,7 @@ module Engine
         # Only companies owned by the president may be bought
         # Allow MC to be bought only before OR 3.1 and there is room for a 2+ train
         companies = super.select { |c| c.owned_by?(entity.player) }
-        companies.reject! { |c| c.id == 'MC' && (@turn >= 3 || entity.trains.size == @phase.train_limit(entity)) }
+        companies.reject! { |c| c.id == 'MC' && (@turn >= 3 || entity.trains.size == train_limit(entity)) }
 
         return companies unless @phase.status.include?('can_buy_companies_operation_round_one')
 

@@ -50,11 +50,11 @@ module Engine
         end
 
         def can_sell_order?
-          !bought? && !shorted?
+          !bought?
         end
 
         def shorted?
-          @current_actions.any? { |x| x.class == Action::Short }
+          @current_actions.any? { |x| x.instance_of?(Action::Short) }
         end
 
         def redeemable_shares(entity)
@@ -87,14 +87,14 @@ module Engine
           actions = []
           if @current_actions.none?
             actions << 'take_loan' if @game.can_take_loan?(entity) && !@corporate_action.is_a?(Action::BuyShares)
-            actions << 'buy_shares' if @game.redeemable_shares(entity).any?
+            actions << 'buy_shares' unless @game.redeemable_shares(entity).empty?
           end
           actions << 'buy_tokens' if can_buy_tokens?(entity)
           actions
         end
 
         def any_corporate_actions?(entity)
-          @game.corporations.any? { |corp| corp.owner == entity && corporate_actions(corp).any? }
+          @game.corporations.any? { |corp| corp.owner == entity && !corporate_actions(corp).empty? }
         end
 
         def can_buy_tokens?(entity)
@@ -130,6 +130,7 @@ module Engine
 
           @game.phase.name != '8' &&
             corporation.total_shares > 2 &&
+            corporation.floated? &&
             (!@game.option_five_shorts? || shorts < 5) &&
             shorts < corporation.total_shares &&
             entity.num_shares_of(corporation) <= 0 &&
@@ -266,7 +267,7 @@ module Engine
           tokens = @game.tokens_needed(entity)
           token_cost = tokens * TOKEN_COST
           entity.spend(token_cost, @game.bank)
-          @log << "#{entity.name} buys #{tokens} tokens for #{@game.format_currency(token_cost)}"
+          @log << "#{entity.name} buys #{tokens} token#{'s' if tokens > 1} for #{@game.format_currency(token_cost)}"
           tokens.times.each do |_i|
             entity.tokens << Engine::Token.new(entity)
           end
@@ -331,8 +332,8 @@ module Engine
           tokens = @game.tokens_needed(corporation)
           if tokens.positive?
             token_cost = tokens * TOKEN_COST
-            @log << "#{corporation.name} must buy #{tokens} tokens for #{@game.format_currency(token_cost)}"\
-            ' before end of stock round'
+            @log << "#{corporation.name} must buy #{tokens} token#{'s' if tokens > 1} for "\
+                    "#{@game.format_currency(token_cost)} before end of stock round"
           end
 
           @auctioning = nil
